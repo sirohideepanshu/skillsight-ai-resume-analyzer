@@ -1,28 +1,28 @@
 const express = require("express")
 const cors = require("cors")
 require("dotenv").config()
+
 const pool = require("./config/db")
-
-const app = express()
-
-// Database
-
-// Middleware
-app.use(cors())
-app.use(express.json({ limit: "10mb" }))
-
-// Serve uploaded files (resumes at /uploads/resumes/file.pdf)
-app.use("/uploads", express.static("uploads"))
-
-// Routes
 const authRoutes = require("./routes/auth.routes")
 const jobRoutes = require("./routes/job.routes")
 const resumeRoutes = require("./routes/resume.routes")
 const candidateRoutes = require("./routes/candidate.routes")
 const dashboardRoutes = require("./routes/dashboard.routes")
 const applicationRoutes = require("./routes/application.routes")
+const mlRoutes = require("./routes/mlRoutes")
+const authMiddleware = require("./middleware/auth.middleware")
+const authorizeRoles = require("./middleware/role.middleware")
 
-// Use Routes
+const app = express()
+
+app.use(cors())
+app.use(express.json())
+
+// Serve uploaded files (resumes at /uploads/resumes/file.pdf)
+app.use("/uploads", express.static("uploads"))
+
+app.use("/api/ml", mlRoutes)
+
 app.use("/api/auth", authRoutes)
 app.use("/api/jobs", jobRoutes)
 app.use("/api/resumes", resumeRoutes)
@@ -30,14 +30,13 @@ app.use("/api", candidateRoutes)
 app.use("/api", dashboardRoutes)
 app.use("/api/applications", applicationRoutes)
 
-// Health Check
+app.get("/", (req, res) => {
+  res.send("Backend is running 🚀")
+})
+
 app.get("/api/health", (req, res) => {
   res.json({ status: "OK" })
 })
-
-// Protected route example
-const authMiddleware = require("./middleware/auth.middleware")
-const authorizeRoles = require("./middleware/role.middleware")
 
 app.get("/api/protected", authMiddleware, (req, res) => {
   res.json({
@@ -111,7 +110,5 @@ async function startServer() {
     process.exit(1)
   }
 }
-app.get("/", (req, res) => {
-  res.send("Backend is running 🚀");
-});
+
 startServer()
