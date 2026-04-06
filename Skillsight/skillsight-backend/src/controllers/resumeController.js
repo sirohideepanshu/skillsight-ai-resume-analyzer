@@ -4,6 +4,80 @@ const path = require("path")
 const pdfParse = require("pdf-parse")
 const axios = require("axios")
 
+const ML_API_URL = "https://skillsight-ml.onrender.com/analyze-resume"
+
+function normalizeArray(value) {
+  if (Array.isArray(value)) {
+    return value.filter((item) => typeof item === "string" && item.trim())
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean)
+  }
+
+  return []
+}
+
+function buildFallbackAnalysis(job = {}) {
+  const suggestions = [
+    "Resume analysis is temporarily unavailable. Please try again shortly."
+  ]
+
+  return {
+    score: 0,
+    detected_skills: [],
+    missing_skills: [],
+    suggestions,
+    fallback: true,
+    fallback_reason: "ML API request failed",
+    min_match_score: Number(job.min_match_score ?? 75),
+    min_experience_years: Number(job.min_experience_years ?? 0)
+  }
+}
+
+async function callMlApi({ extractedText, job }) {
+  try {
+    const response = await axios.post(
+      ML_API_URL,
+      {
+        resume_text: extractedText,
+        job_description: job.description || "",
+        skill_weights: job.skill_weights || {}
+      },
+      {
+        headers: {
+          "Content-Type": "application/json"
+        },
+        timeout: 20000
+      }
+    )
+
+    const { score, detected_skills, missing_skills, suggestions } = response.data || {}
+
+    return {
+      score: Number.isFinite(Number(score)) ? Number(score) : 0,
+      detected_skills: normalizeArray(detected_skills),
+      missing_skills: normalizeArray(missing_skills),
+      suggestions: normalizeArray(suggestions),
+      fallback: false,
+      min_match_score: Number(job.min_match_score ?? 75),
+      min_experience_years: Number(job.min_experience_years ?? 0)
+    }
+  } catch (error) {
+    const detail =
+      error.response?.data?.detail ||
+      error.response?.data?.error ||
+      error.message
+
+    console.error("ML API request failed:", detail)
+
+    return buildFallbackAnalysis(job)
+  }
+}
+
 async function analyzeResumeForJob({ userId, jobId, resumeRecord }) {
   if (!userId || !jobId) {
     throw new Error("userId and jobId are required for analysis")
@@ -30,16 +104,19 @@ async function analyzeResumeForJob({ userId, jobId, resumeRecord }) {
     }
   }
 
-  const job = await pool.query(
-    "SELECT description, skill_weights, min_match_score, min_experience_years FROM jobs WHERE id = $1",
+  const jobResult = await pool.query(
+    `SELECT description, skill_weights, min_match_score, min_experience_years
+     FROM jobs
+     WHERE id = $1`,
     [jobId]
   )
 
-  if (!job.rows.length) {
+  if (!jobResult.rows.length) {
     throw new Error("Job not found")
   }
 
-  const resumeFilePath = latestResume.file_path
+  const job = jobResult.rows[0]
+  const resumeFilePath = latestResume.file_path || ""
   const normalizedResumePath = resumeFilePath.startsWith("uploads/")
     ? resumeFilePath
     : `uploads/resumes/${resumeFilePath.split("/").pop()}`
@@ -47,57 +124,26 @@ async function analyzeResumeForJob({ userId, jobId, resumeRecord }) {
 
   const dataBuffer = fs.readFileSync(absoluteResumePath)
   const pdfData = await pdfParse(dataBuffer)
-  const resumeText = (pdfData.text || "").trim()
+  const extractedText = (pdfData.text || "").trim()
 
-  if (!resumeText) {
+  if (!extractedText) {
     throw new Error("Resume text extraction failed")
   }
 
-  console.log("Sending resume to ML API")
+  console.log(`Sending resume to ML API: ${ML_API_URL}`)
 
-  let aiResponse
-  try {
-    aiResponse = await axios.post(
-      "http://localhost:8000/analyze-resume",
-      {
-        resume_text: resumeText,
-        job_description: job.rows[0].description,
-        skill_weights: job.rows[0].skill_weights || {}
-      },
-      { timeout: 20000 }
-    )
-  } catch (error) {
-    const isUnavailable =
-      error.code === "ECONNREFUSED" ||
-      error.code === "ECONNABORTED" ||
-      error.code === "ENOTFOUND"
+  const mlAnalysis = await callMlApi({ extractedText, job })
+  const {
+    score,
+    detected_skills,
+    missing_skills,
+    suggestions,
+    fallback,
+    min_match_score,
+    min_experience_years
+  } = mlAnalysis
 
-    if (isUnavailable) {
-      throw new Error("ML API is not reachable on port 8000. Start the SkillSight-AI server and try again.")
-    }
-
-    const detail =
-      error.response?.data?.detail ||
-      error.response?.data?.error ||
-      error.message
-
-    throw new Error(`ML analysis failed: ${detail}`)
-  }
-
-  console.log("ML Response:", aiResponse.data)
-
-  const matchedSkills =
-    aiResponse.data.matched_skills ||
-    aiResponse.data.detected_skills ||
-    []
-  const missingSkills = aiResponse.data.missing_skills || []
-  const score =
-    aiResponse.data.score ??
-    aiResponse.data.candidate_score ??
-    0
-  const suggestions = aiResponse.data.suggestions || []
-  const minimumMatchScore = Number(job.rows[0].min_match_score ?? 75)
-  const minimumExperienceYears = Number(job.rows[0].min_experience_years ?? 0)
+  const matchedSkills = detected_skills
 
   const candidateResult = await pool.query(
     `SELECT COALESCE(experience_years, 0) AS experience_years
@@ -119,31 +165,33 @@ async function analyzeResumeForJob({ userId, jobId, resumeRecord }) {
   await pool.query(
     `INSERT INTO candidate_analysis
      (resume_id, job_id, score, matched_skills, missing_skills, suggestions)
-     VALUES ($1,$2,$3,$4,$5,$6)`,
+     VALUES ($1, $2, $3, $4, $5, $6)`,
     [
       latestResume.id,
       jobId,
       score,
       JSON.stringify(matchedSkills),
-      JSON.stringify(missingSkills),
+      JSON.stringify(missing_skills),
       JSON.stringify(suggestions)
     ]
   )
 
-  if (candidateExperienceYears < minimumExperienceYears) {
-    suggestions.unshift(
-      `Minimum experience not met: requires ${minimumExperienceYears} year(s), candidate has ${candidateExperienceYears}.`
+  const finalSuggestions = [...suggestions]
+
+  if (candidateExperienceYears < min_experience_years) {
+    finalSuggestions.unshift(
+      `Minimum experience not met: requires ${min_experience_years} year(s), candidate has ${candidateExperienceYears}.`
     )
   }
 
-  const meetsScoreThreshold = score >= minimumMatchScore
-  const meetsExperienceThreshold = candidateExperienceYears >= minimumExperienceYears
+  const meetsScoreThreshold = score >= min_match_score
+  const meetsExperienceThreshold = candidateExperienceYears >= min_experience_years
   const nextStatus =
     meetsScoreThreshold && meetsExperienceThreshold ? "Shortlisted" : "Rejected"
   const rejectionFeedback =
     nextStatus === "Rejected"
-      ? suggestions.slice(0, 2).join(" ")
-      || "Candidate does not have the same skillset as required for this role."
+      ? finalSuggestions.slice(0, 2).join(" ") ||
+        "Candidate does not have the same skillset as required for this role."
       : null
 
   await pool.query(
@@ -158,23 +206,24 @@ async function analyzeResumeForJob({ userId, jobId, resumeRecord }) {
 
   return {
     score,
-    min_match_score: minimumMatchScore,
-    min_experience_years: minimumExperienceYears,
+    min_match_score,
+    min_experience_years,
     candidate_experience_years: candidateExperienceYears,
     auto_status: nextStatus,
     matched_skills: matchedSkills,
-    missing_skills: missingSkills,
-    suggestions
+    missing_skills,
+    suggestions: finalSuggestions,
+    fallback
   }
 }
 
-// Get latest uploaded resume
 exports.getMyResume = async (req, res) => {
   try {
     const userId = req.user.id
 
     const result = await pool.query(
-      `SELECT * FROM resumes
+      `SELECT *
+       FROM resumes
        WHERE user_id = $1
        ORDER BY id DESC
        LIMIT 1`,
@@ -182,19 +231,14 @@ exports.getMyResume = async (req, res) => {
     )
 
     res.json(result.rows[0] || null)
-
   } catch (err) {
     console.error("Fetch resume error:", err)
     res.status(500).json({ error: "Failed to fetch resume" })
   }
 }
 
-
-// Upload resume and analyze with AI
 exports.uploadResume = async (req, res) => {
-
   try {
-
     const userId = req.user?.id || 1
     const jobId = req.body.jobId ? parseInt(req.body.jobId, 10) : null
 
@@ -202,13 +246,11 @@ exports.uploadResume = async (req, res) => {
       return res.status(400).json({ error: "Resume file not uploaded" })
     }
 
-    // Store path as uploads/resumes/filename for correct URL (http://localhost:5050/uploads/resumes/file.pdf)
     const filePath = `uploads/resumes/${req.file.filename}`
 
-    // Save resume
     const resumeResult = await pool.query(
       `INSERT INTO resumes (user_id, file_path)
-       VALUES ($1,$2)
+       VALUES ($1, $2)
        RETURNING *`,
       [userId, filePath]
     )
@@ -242,7 +284,8 @@ exports.uploadResume = async (req, res) => {
             job_id: application.job_id,
             score: analysis.score,
             matched_skills: analysis.matched_skills,
-            missing_skills: analysis.missing_skills
+            missing_skills: analysis.missing_skills,
+            fallback: analysis.fallback
           })
         } catch (analysisError) {
           console.error("Resume analysis after upload failed:", analysisError)
@@ -283,9 +326,7 @@ exports.uploadResume = async (req, res) => {
         analysis_error: analysisError.message
       })
     }
-
   } catch (error) {
-
     console.error("Resume upload error:", error)
 
     res.status(500).json({
