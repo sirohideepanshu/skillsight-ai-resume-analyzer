@@ -1,0 +1,9 @@
+{
+"ml":"machine learning",
+"dl":"deep learning",
+"js":"javascript",
+"ts":"typescript",
+"node":"nodejs",
+"postgres":"postgresql",
+"k8s":"kubernetes"
+}
