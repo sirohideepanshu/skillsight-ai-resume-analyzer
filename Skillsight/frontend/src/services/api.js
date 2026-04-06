@@ -1,13 +1,7 @@
 import axios from "axios";
 
-const BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  "https://skillsight-backend-ylix.onrender.com";
-
-console.log("Using API:", BASE_URL);
-
 const API = axios.create({
-  baseURL: BASE_URL,
+  baseURL: import.meta.env.VITE_API_URL, // ✅ ONLY this
 });
 
 // attach token automatically
