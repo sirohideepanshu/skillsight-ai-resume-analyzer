@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import API from '../services/api'
-import { setAuthSession } from '../utils/authSession'
 import SkillSightLogo from '../components/SkillSightLogo'
 
 export default function Login() {
@@ -25,13 +24,11 @@ export default function Login() {
 
       const { token, user } = res.data
 
-      setAuthSession({
-        token,
-        userRole: user.role,
-        userId: user.id,
-        userName: user.name || '',
-        profilePhoto: user.profile_photo || ''
-      })
+      // ✅ STORE TOKEN + USER (IMPORTANT)
+      localStorage.setItem('token', token)
+      localStorage.setItem('user', JSON.stringify(user))
+
+      console.log("Login success:", user)
 
       const normalizedRole = (user.role || '').toLowerCase()
 
@@ -40,13 +37,20 @@ export default function Login() {
       } else {
         navigate('/dashboard/student')
       }
+
     } catch (err) {
       console.error('Login error:', err)
+
       if (err.response) {
-        setError(err.response.data?.error || err.response.data?.message || 'Login failed')
+        setError(
+          err.response.data?.error ||
+          err.response.data?.message ||
+          'Login failed'
+        )
       } else {
         setError('Cannot connect to server')
       }
+
     } finally {
       setIsSubmitting(false)
     }
