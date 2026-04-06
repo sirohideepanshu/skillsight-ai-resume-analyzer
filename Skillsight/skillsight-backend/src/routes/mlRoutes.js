@@ -9,13 +9,11 @@ router.post('/analyze', async (req, res) => {
     const { resume_text, job_description, user_id, job_id } = req.body;
 
     // 1️⃣ Call ML API
-    const mlResponse = await axios.post(
-      process.env.ML_API_URL,
-      {
-        resume_text,
-        job_description
-      }
-    );
+    const mlResponse = await axios.post(process.env.ML_API_URL, {
+  resume_text,
+  job_description,
+  skill_weights: {}   // REQUIRED 🔥
+});
 
     const result = mlResponse.data;
 
