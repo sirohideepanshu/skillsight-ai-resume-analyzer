@@ -1,10 +1,17 @@
 import axios from "axios";
 
+const BASE_URL = import.meta.env.VITE_API_URL;
+
+console.log("API BASE URL:", import.meta.env.VITE_API_URL);
+
+if (!BASE_URL) {
+  console.error("❌ VITE_API_URL is NOT defined. Check Vercel env settings.");
+}
+
 const API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL, // ✅ ONLY this
+  baseURL: BASE_URL,
 });
 
-// attach token automatically
 API.interceptors.request.use((req) => {
   const token = localStorage.getItem("token");
   if (token) {

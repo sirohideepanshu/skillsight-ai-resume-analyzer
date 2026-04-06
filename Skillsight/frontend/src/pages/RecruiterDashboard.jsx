@@ -3,6 +3,8 @@ import DashboardLayout from "../layouts/DashboardLayout.jsx"
 import API from "../services/api"
 import { getAuthToken, getSessionItem } from "../utils/authSession"
 
+const backendBaseUrl = API.defaults.baseURL?.replace(/\/$/, "") || ""
+
 export default function RecruiterDashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const [applications, setApplications] = useState([])
@@ -225,7 +227,7 @@ export default function RecruiterDashboard() {
                         <td className="px-8 py-6">
                           {app.resume_file_path ? (
                             <a
-                              href={`http://localhost:5050/${app.resume_file_path}`}
+                              href={`${backendBaseUrl}/${String(app.resume_file_path || "").replace(/^\//, "")}`}
                               target="_blank"
                               rel="noreferrer"
                               className="inline-flex items-center justify-center rounded-2xl bg-cyan-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300"

@@ -3,6 +3,7 @@ import DashboardLayout from '../layouts/DashboardLayout.jsx'
 import CandidateTable from '../components/CandidateTable.jsx'
 import ScoreCard from '../components/ScoreCard.jsx'
 import { useEffect, useState } from "react"
+import API from "../services/api"
 import { getAuthToken } from '../utils/authSession'
 
 const RECENT_APPLICATIONS = [
@@ -39,16 +40,13 @@ export default function Dashboard() {
 
         const token = getAuthToken()
 
-        const res = await fetch(
-          "http://localhost:5050/api/dashboard/stats",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
+        const res = await API.get("/dashboard/stats", {
+          headers: {
+            Authorization: `Bearer ${token}`
           }
-        )
+        })
 
-        const data = await res.json()
+        const data = res.data
 
         setStats(data)
 

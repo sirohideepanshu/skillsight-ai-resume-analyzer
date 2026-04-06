@@ -3,6 +3,8 @@ import DashboardLayout from "../layouts/DashboardLayout.jsx"
 import API from "../services/api"
 import { getAuthToken, getSessionItem } from "../utils/authSession"
 
+const backendBaseUrl = API.defaults.baseURL?.replace(/\/$/, "") || ""
+
 const CAREER_PATHS = {
   "Frontend Developer": {
     points: [
@@ -383,7 +385,7 @@ export default function StudentDashboard() {
                 </div>
 
                 <a
-                  href={`http://localhost:5050/${resume.file_path}`}
+                  href={`${backendBaseUrl}/${String(resume.file_path || "").replace(/^\//, "")}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex w-full items-center justify-center rounded-2xl bg-cyan-400 px-5 py-3.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300"

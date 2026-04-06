@@ -3,6 +3,8 @@ import DashboardLayout from "../layouts/DashboardLayout.jsx"
 import API from "../services/api"
 import { getAuthToken } from "../utils/authSession"
 
+const backendBaseUrl = API.defaults.baseURL?.replace(/\/$/, "") || ""
+
 function computeRanking(rawCandidates) {
   const sorted = [...rawCandidates].sort((a, b) => {
     const sa = a.finalScore != null ? a.finalScore : -1
@@ -292,7 +294,7 @@ export default function CandidateRanking() {
 
                 {selected.resumePath ? (
                   <a
-                    href={`http://localhost:5050/${selected.resumePath}`}
+                    href={`${backendBaseUrl}/${String(selected.resumePath || "").replace(/^\//, "")}`}
                     target="_blank"
                     rel="noreferrer"
                     className="mt-8 inline-flex w-full items-center justify-center rounded-2xl bg-cyan-400 px-5 py-3.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300"
