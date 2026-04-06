@@ -52,7 +52,7 @@ export default function Register() {
       const message =
         err.response?.data?.error ||
         (err.code === 'ERR_NETWORK'
-          ? 'Cannot reach server. Check whether the backend is running on port 5050.'
+  ? 'Cannot reach server. Backend might be down or URL incorrect.'
           : err.message || 'Registration failed')
       setError(message)
     } finally {
