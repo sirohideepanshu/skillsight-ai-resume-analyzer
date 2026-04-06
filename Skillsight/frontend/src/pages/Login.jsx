@@ -17,26 +17,30 @@ export default function Login() {
     setIsSubmitting(true)
 
     try {
-      const res = await API.post('/auth/login', {
-        email,
-        password
-      })
+  const res = await API.post('/auth/login', {
+    email,
+    password
+  })
 
-      const { token, user } = res.data
+  console.log("Login success:", res.data)
 
-      // ✅ STORE TOKEN + USER (IMPORTANT)
-      localStorage.setItem('token', token)
-      localStorage.setItem('user', JSON.stringify(user))
+  const token = res.data.token
+  const user = res.data.user || res.data
 
-      console.log("Login success:", user)
+  setAuthSession({
+    token,
+    userRole: user.role || 'student',
+    userId: user.id,
+    userName: user.name || '',
+    profilePhoto: user.profile_photo || ''
+  })
 
-      const normalizedRole = (user.role || '').toLowerCase()
-
-      if (normalizedRole === 'recruiter') {
-        navigate('/dashboard/recruiter')
-      } else {
-        navigate('/dashboard/student')
-      }
+ 
+  if (user.role === 'recruiter') {
+    window.location.href = '/dashboard/recruiter'
+  } else {
+    window.location.href = '/dashboard/student'
+  }
 
     } catch (err) {
       console.error('Login error:', err)
