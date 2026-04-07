@@ -10,6 +10,10 @@ import {
   updateProfileSession
 } from "../utils/authSession"
 
+
+
+
+
 const STUDENT_LINKS = [
   { to: "/dashboard/student", label: "Overview", icon: IconDashboard },
   { to: "/dashboard/student#resume", label: "Resume", icon: IconResume },
@@ -183,7 +187,7 @@ export default function DashboardLayout({ children, pageTitle }) {
 
               <div className="mt-auto pt-6">
                 <button
-                  onClick={logout}
+                  onClick={handleLogout}
                   className="inline-flex w-full items-center justify-center rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/15"
                 >
                   Logout

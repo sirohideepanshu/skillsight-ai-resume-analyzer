@@ -26,7 +26,7 @@ router.post("/login", async (req, res) => {
     }
 
     res.json({
-      success: true,
+      token: "dummy-token", // 🔥 IMPORTANT (frontend expects token)
       user: {
         id: user.id,
         email: user.email,
