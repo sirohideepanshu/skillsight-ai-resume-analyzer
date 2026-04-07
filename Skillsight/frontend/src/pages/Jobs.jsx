@@ -8,20 +8,22 @@ export default function Jobs() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const loadJobs = async () => {
-      try {
-        const res = await API.get("/jobs")
-        setJobs(Array.isArray(res.data) ? res.data : [])
-      } catch (error) {
-        console.error("Failed to load jobs:", error)
-        setJobs([])
-      } finally {
-        setLoading(false)
-      }
+  const loadJobs = async () => {
+    try {
+      const res = await API.get("/api/jobs")
+      setJobs(Array.isArray(res.data) ? res.data : [])
+    } catch (error) {
+      console.error("Failed to load jobs:", error)
+      setJobs([])
+    } finally {
+      setLoading(false)
     }
+  }
 
-    loadJobs()
-  }, [])
+  loadJobs()
+}, [])
+
+ 
 
   const weightedRoles = useMemo(
     () => jobs.filter((job) => job.skill_weights && Object.keys(job.skill_weights).length > 0).length,

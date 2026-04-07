@@ -75,47 +75,48 @@ export default function ResumeUpload() {
 
   const handleUpload = async () => {
 
-    if (!file) return
-    if (!jobId) {
-      setError("Please enter Job ID")
-      return
-    }
-
-    try {
-
-      setStatus("uploading")
-      setError(null)
-
-      const token = getAuthToken()
-
-      const formData = new FormData()
-
-      formData.append("resume", file)
-      formData.append("jobId", jobId)
-
-      const res = await API.post("/resumes/upload", formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "multipart/form-data"
-        }
-      })
-
-      if (res.data?.analysis_error) {
-        setStatus("error")
-        setError(`${res.data.message}. ${res.data.analysis_error}`)
-      } else {
-        setStatus("success")
-      }
-
-    } catch (err) {
-
-      console.error(err)
-
-      setStatus("error")
-      setError(err.response?.data?.error || err.response?.data?.message || "Upload failed")
-
-    }
+  if (!file) return
+  if (!jobId) {
+    setError("Please enter Job ID")
+    return
   }
+
+  try {
+
+    setStatus("uploading")
+    setError(null)
+
+    const formData = new FormData()
+
+    formData.append("resume", file)
+    formData.append("jobId", jobId)
+
+    const res = await API.post("/api/resumes/upload", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data"
+      }
+    })
+
+    if (res.data?.analysis_error) {
+      setStatus("error")
+      setError(`${res.data.message}. ${res.data.analysis_error}`)
+    } else {
+      setStatus("success")
+    }
+
+  } catch (err) {
+
+    console.error(err)
+
+    setStatus("error")
+    setError(
+      err.response?.data?.error ||
+      err.response?.data?.message ||
+      "Upload failed"
+    )
+
+  }
+}
 
   return (
 
