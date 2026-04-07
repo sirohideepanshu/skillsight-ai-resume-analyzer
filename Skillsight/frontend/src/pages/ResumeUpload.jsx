@@ -91,8 +91,11 @@ export default function ResumeUpload() {
     formData.append("resume", file)
     formData.append("jobId", jobId)
 
-    const res = await API.post("/resumes/upload", formData, {
+    const token = getAuthToken()
+
+const res = await API.post("/resumes/upload", formData, {
   headers: {
+    Authorization: `Bearer ${token}`,
     "Content-Type": "multipart/form-data"
   }
 })
