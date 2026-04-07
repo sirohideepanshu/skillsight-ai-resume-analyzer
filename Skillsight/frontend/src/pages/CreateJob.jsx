@@ -75,9 +75,7 @@ export default function CreateJob() {
         payload.skill_weights = parsedWeights
       }
 
-      await API.post("/jobs", payload, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      await API.post("/jobs", payload)
 
       setSuccess("Job created successfully.")
       setTitle("")

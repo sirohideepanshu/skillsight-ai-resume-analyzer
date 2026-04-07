@@ -26,6 +26,10 @@ export default function Login() {
       console.log("Login success:", res.data)
 
       const token = res.data.token
+
+if (!token) {
+  throw new Error("Token not received")
+}
       const user = res.data.user || res.data
 
       // ✅ Save session

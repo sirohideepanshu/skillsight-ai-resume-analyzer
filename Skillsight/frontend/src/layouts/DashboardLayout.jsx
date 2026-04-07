@@ -86,10 +86,10 @@ export default function DashboardLayout({ children, pageTitle }) {
     loadProfile()
   }, [role])
 
-  const logout = () => {
-    clearAuthSession()
-    navigate("/login")
-  }
+  const handleLogout = () => {
+  localStorage.clear()
+  window.location.href = "/login"
+}
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.12),transparent_28%),linear-gradient(180deg,#07111f_0%,#08101c_48%,#0b1524_100%)] text-slate-100">
