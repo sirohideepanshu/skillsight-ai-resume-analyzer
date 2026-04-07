@@ -91,7 +91,7 @@ export default function ResumeUpload() {
     formData.append("resume", file)
     formData.append("jobId", jobId)
 
-    const res = await API.post("/api/resumes/upload", formData, {
+    const res = await API.post("/resumes/upload", formData, {
       headers: {
         "Content-Type": "multipart/form-data"
       }

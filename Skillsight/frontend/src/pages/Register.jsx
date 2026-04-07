@@ -46,7 +46,7 @@ export default function Register() {
             : null
       }
 
-      await API.post('/api/auth/register', payload)
+      await API.post('/auth/register', payload)
       setSuccess('Account created. You can sign in now.')
     } catch (err) {
       const message =

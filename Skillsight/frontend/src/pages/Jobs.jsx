@@ -10,7 +10,7 @@ export default function Jobs() {
   useEffect(() => {
   const loadJobs = async () => {
     try {
-      const res = await API.get("/api/jobs")
+      const res = await API.get("/jobs")
       setJobs(Array.isArray(res.data) ? res.data : [])
     } catch (error) {
       console.error("Failed to load jobs:", error)

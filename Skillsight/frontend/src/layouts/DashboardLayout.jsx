@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router-dom"
 import { useEffect, useMemo, useState } from "react"
 import API from "../services/api"
 import SkillSightLogo from "../components/SkillSightLogo"
+import { useNavigate } from "react-router-dom"
 import {
   clearAuthSession,
   getAuthToken,
@@ -87,7 +88,7 @@ export default function DashboardLayout({ children, pageTitle }) {
 
   const logout = () => {
     clearAuthSession()
-    window.location.href = "/login"
+    navigate("/login")
   }
 
   return (

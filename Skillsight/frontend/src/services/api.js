@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const API = axios.create({
-  baseURL: "https://skillsight-backend-ylix.onrender.com",
+  baseURL: "https://skillsight-backend-ylix.onrender.com/api",
 });
 
 API.interceptors.request.use((req) => {
