@@ -74,42 +74,27 @@ export default function ResumeUpload() {
   }
 
   const handleUpload = async () => {
-
   if (!file) return
-  if (!jobId) {
-    setError("Please enter Job ID")
-    return
-  }
 
   try {
-
     setStatus("uploading")
     setError(null)
 
     const formData = new FormData()
-
     formData.append("resume", file)
-    formData.append("jobId", jobId)
 
-    const token = getAuthToken()
-
-const res = await API.post("/resumes/upload", formData, {
-  headers: {
-    Authorization: `Bearer ${token}`,
-    "Content-Type": "multipart/form-data"
-  }
-})
-
-    if (res.data?.analysis_error) {
-      setStatus("error")
-      setError(`${res.data.message}. ${res.data.analysis_error}`)
-    } else {
-      setStatus("success")
+    if (jobId) {
+      formData.append("jobId", jobId)
     }
 
-  } catch (err) {
+    const res = await API.post("/resumes/upload", formData)
 
-    console.error(err)
+    console.log("UPLOAD RESPONSE:", res.data)
+
+    setStatus("success")
+
+  } catch (err) {
+    console.error("UPLOAD ERROR:", err.response?.data || err.message)
 
     setStatus("error")
     setError(
@@ -117,7 +102,6 @@ const res = await API.post("/resumes/upload", formData, {
       err.response?.data?.message ||
       "Upload failed"
     )
-
   }
 }
 

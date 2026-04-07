@@ -25,6 +25,11 @@ app.use(express.json());
 
 /* static files */
 app.use("/uploads", express.static("uploads"));
+const fs = require("fs")
+
+if (!fs.existsSync("uploads/resumes")) {
+  fs.mkdirSync("uploads/resumes", { recursive: true })
+}
 
 /* routes */
 app.use("/api/ml", mlRoutes);
