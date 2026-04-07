@@ -10,7 +10,10 @@ exports.createJob = async (req, res) => {
     }
 
     // skill_weights: object like { "React": 60, "CSS": 40 } for weighted scoring
-    const weights = skill_weights && typeof skill_weights === "object" ? skill_weights : {}
+    const weights =
+  skill_weights && typeof skill_weights === "object"
+    ? JSON.stringify(skill_weights)
+    : JSON.stringify({})
     const parsedMinScore = Number(min_match_score)
     const minimumScore =
       Number.isFinite(parsedMinScore) && parsedMinScore >= 0 && parsedMinScore <= 100
