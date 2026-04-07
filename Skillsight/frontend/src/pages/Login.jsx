@@ -18,10 +18,10 @@ export default function Login() {
     setIsSubmitting(true)
 
     try {
-      const res = await API.post('/auth/login', {
-        email,
-        password
-      })
+      const res = await API.post('/api/auth/login', {
+  email,
+  password
+})
 
       console.log("Login success:", res.data)
 
