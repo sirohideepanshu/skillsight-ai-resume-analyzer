@@ -3,7 +3,7 @@ import DashboardLayout from "../layouts/DashboardLayout.jsx"
 import API from "../services/api"
 import { getAuthToken, getSessionItem } from "../utils/authSession"
 
-const backendBaseUrl = API.defaults.baseURL?.replace(/\/$/, "") || ""
+const backendBaseUrl = API.defaults.baseURL?.replace(/\/api\/?$/, "") || ""
 
 const CAREER_PATHS = {
   "Frontend Developer": {
@@ -103,6 +103,12 @@ function formatSkillWeights(sw) {
   }
 
   return parts.join(" · ")
+}
+
+function openResumeUrl(resumeUrl) {
+  if (!resumeUrl) return
+  const finalUrl = /^https?:\/\//i.test(resumeUrl) ? resumeUrl : `${backendBaseUrl}${resumeUrl}`
+  window.open(finalUrl, "_blank")
 }
 
 export default function StudentDashboard() {
@@ -385,12 +391,7 @@ export default function StudentDashboard() {
 
                 <button
                   type="button"
-                  onClick={() =>
-                    window.open(
-                      resume.file_url || `${backendBaseUrl}/${String(resume.file_path || "").replace(/^\//, "")}`,
-                      "_blank"
-                    )
-                  }
+                  onClick={() => openResumeUrl(resume.file_url || resume.file_path)}
                   className="inline-flex w-full items-center justify-center rounded-2xl bg-cyan-400 px-5 py-3.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300"
                 >
                   View resume

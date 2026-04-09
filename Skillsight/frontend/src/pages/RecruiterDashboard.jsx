@@ -3,6 +3,14 @@ import DashboardLayout from "../layouts/DashboardLayout.jsx"
 import API from "../services/api"
 import { getAuthToken, getSessionItem } from "../utils/authSession"
 
+const backendBaseUrl = API.defaults.baseURL?.replace(/\/api\/?$/, "") || ""
+
+function openResumeUrl(resumeUrl) {
+  if (!resumeUrl) return
+  const finalUrl = /^https?:\/\//i.test(resumeUrl) ? resumeUrl : `${backendBaseUrl}${resumeUrl}`
+  window.open(finalUrl, "_blank")
+}
+
 export default function RecruiterDashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const [applications, setApplications] = useState([])
@@ -76,7 +84,7 @@ export default function RecruiterDashboard() {
   )
 
   const newestApplication = applications[0]
-  const avgScoreDisplay = stats.totalApplications > 0 && stats.avgScore === 0 ? "—" : stats.avgScore
+  const avgScoreDisplay = stats.avgScore ?? 0
 
   return (
     <DashboardLayout pageTitle="Recruiter Dashboard">
@@ -118,12 +126,6 @@ export default function RecruiterDashboard() {
                 icon={<IconCheck />}
               />
             </div>
-
-            {stats.totalApplications > 0 && stats.avgScore === 0 && (
-              <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3 text-sm text-slate-400">
-                Resume analysis is still pending, so match scores are not available yet.
-              </div>
-            )}
           </div>
 
           <div className="rounded-[32px] border border-slate-800 bg-slate-900/65 p-6">
@@ -133,9 +135,7 @@ export default function RecruiterDashboard() {
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Average match score</p>
               <div className="mt-3 flex items-end gap-3">
                 <span className="text-4xl font-semibold tracking-tight text-white">{avgScoreDisplay}</span>
-                <span className="pb-1 text-sm text-slate-500">
-                  {avgScoreDisplay === "—" ? "Awaiting analysis" : "current average"}
-                </span>
+                <span className="pb-1 text-sm text-slate-500">current average</span>
               </div>
             </div>
 
@@ -226,7 +226,7 @@ export default function RecruiterDashboard() {
                           {app.resume_url || app.resume_file_path ? (
                             <button
                               type="button"
-                              onClick={() => window.open(app.resume_url || app.resume_file_path, "_blank")}
+                              onClick={() => openResumeUrl(app.resume_url || app.resume_file_path)}
                               className="inline-flex items-center justify-center rounded-2xl bg-cyan-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300"
                             >
                               View resume

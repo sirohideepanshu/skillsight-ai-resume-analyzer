@@ -7,20 +7,11 @@ function getApplicationUserId(application) {
   return application.user_id || application.candidate_id || null
 }
 
-function getBaseUrl(req) {
-  if (process.env.BASE_URL) {
-    return process.env.BASE_URL.replace(/\/$/, "")
-  }
-
-  const protocol = req.get("x-forwarded-proto") || req.protocol
-  return `${protocol}://${req.get("host")}`
-}
-
-function buildResumeUrl(req, value) {
+function buildResumeUrl(value) {
   if (!value) return null
-  if (/^https?:\/\//i.test(value)) return value
+  if (String(value).startsWith("/api/uploads/")) return String(value)
   const filename = path.basename(String(value))
-  return `${getBaseUrl(req)}/api/uploads/resumes/${filename}`
+  return `/api/uploads/resumes/${filename}`
 }
 
 function parseStoredArray(value) {
@@ -64,7 +55,7 @@ exports.getMyApplications = async (req, res) => {
       ...row,
       status: row.status || "Applied",
       rejection_feedback: row.rejection_feedback || "",
-      resume_url: buildResumeUrl(req, row.resume_url),
+      resume_url: buildResumeUrl(row.resume_url),
       analysis_notes: parseStoredArray(row.analysis_suggestions)
     }))
 
@@ -93,7 +84,7 @@ exports.createApplication = async (req, res) => {
       [userId]
     )
     const latestResume = latestResumeResult.rows[0] || null
-    const resumeUrl = latestResume ? buildResumeUrl(req, latestResume.file_path) : null
+    const resumeUrl = latestResume ? buildResumeUrl(latestResume.file_path) : null
 
     const existing = await pool.query(
       `SELECT *
@@ -131,7 +122,7 @@ exports.createApplication = async (req, res) => {
           application: {
             ...result.rows[0],
             user_id: getApplicationUserId(result.rows[0]),
-            resume_url: buildResumeUrl(req, result.rows[0].resume_url)
+            resume_url: buildResumeUrl(result.rows[0].resume_url)
           },
           analysis_warning: analysis.reason
         })
@@ -142,7 +133,7 @@ exports.createApplication = async (req, res) => {
         application: {
           ...result.rows[0],
           user_id: getApplicationUserId(result.rows[0]),
-          resume_url: buildResumeUrl(req, result.rows[0].resume_url)
+          resume_url: buildResumeUrl(result.rows[0].resume_url)
         },
         analysis
       })
@@ -153,7 +144,7 @@ exports.createApplication = async (req, res) => {
         application: {
           ...result.rows[0],
           user_id: getApplicationUserId(result.rows[0]),
-          resume_url: buildResumeUrl(req, result.rows[0].resume_url)
+          resume_url: buildResumeUrl(result.rows[0].resume_url)
         },
         analysis_error: analysisError.message
       })
@@ -204,7 +195,7 @@ exports.updateApplicationStatus = async (req, res) => {
     res.json({
       ...row,
       user_id: getApplicationUserId(row),
-      resume_url: buildResumeUrl(req, row.resume_url)
+      resume_url: buildResumeUrl(row.resume_url)
     })
   } catch (err) {
     console.error("Update application status error:", err)

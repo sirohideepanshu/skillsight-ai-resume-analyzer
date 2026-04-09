@@ -1,5 +1,3 @@
-const path = require("path")
-
 const pool = require("../config/db")
 const { analyzeResumeForJob } = require("./resumeController")
 
@@ -16,20 +14,11 @@ function parseStoredArray(value) {
   return []
 }
 
-function getBaseUrl(req) {
-  if (process.env.BASE_URL) {
-    return process.env.BASE_URL.replace(/\/$/, "")
-  }
-
-  const protocol = req.get("x-forwarded-proto") || req.protocol
-  return `${protocol}://${req.get("host")}`
-}
-
-function buildResumeUrl(req, value) {
+function buildResumeUrl(value) {
   if (!value) return null
-  if (/^https?:\/\//i.test(value)) return value
-  const filename = path.basename(String(value))
-  return `${getBaseUrl(req)}/api/uploads/resumes/${filename}`
+  if (String(value).startsWith("/api/uploads/")) return String(value)
+  const filename = require("path").basename(String(value))
+  return `/api/uploads/resumes/${filename}`
 }
 
 async function backfillMissingAnalysis(recruiterId) {
@@ -171,7 +160,7 @@ exports.getRecentApplications = async (req, res) => {
     const rows = result.rows.map((row) => ({
       ...row,
       status: row.status || "Applied",
-      resume_url: buildResumeUrl(req, row.resume_url),
+      resume_url: buildResumeUrl(row.resume_url),
       resume_file_path: row.resume_url
     }))
     res.json(rows)
@@ -227,7 +216,7 @@ exports.getRankingCandidates = async (req, res) => {
       const withStatus = {
         ...row,
         status: row.status || "Applied",
-        resume_url: buildResumeUrl(req, row.resume_url),
+        resume_url: buildResumeUrl(row.resume_url),
         resume_file_path: row.resume_url
       }
       if (!byAppId.has(row.application_id)) byAppId.set(row.application_id, withStatus)

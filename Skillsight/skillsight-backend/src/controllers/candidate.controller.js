@@ -1,5 +1,3 @@
-const path = require("path")
-
 const pool = require("../config/db")
 const { analyzeResumeForJob } = require("./resumeController")
 
@@ -16,20 +14,11 @@ function parseStoredArray(value) {
   return []
 }
 
-function getBaseUrl(req) {
-  if (process.env.BASE_URL) {
-    return process.env.BASE_URL.replace(/\/$/, "")
-  }
-
-  const protocol = req.get("x-forwarded-proto") || req.protocol
-  return `${protocol}://${req.get("host")}`
-}
-
-function buildResumeUrl(req, value) {
+function buildResumeUrl(value) {
   if (!value) return null
-  if (/^https?:\/\//i.test(value)) return value
-  const filename = path.basename(String(value))
-  return `${getBaseUrl(req)}/api/uploads/resumes/${filename}`
+  if (String(value).startsWith("/api/uploads/")) return String(value)
+  const filename = require("path").basename(String(value))
+  return `/api/uploads/resumes/${filename}`
 }
 
 exports.getCandidatesForJob = async (req, res) => {
@@ -121,7 +110,7 @@ exports.getCandidatesForJob = async (req, res) => {
       suggestions: candidate.suggestions || [],
       experience: `${candidate.experience_years || 0} yrs`,
       status: candidate.status || "Applied",
-      resume_url: buildResumeUrl(req, candidate.resume_url)
+      resume_url: buildResumeUrl(candidate.resume_url)
     }))
 
     res.json(candidates)
