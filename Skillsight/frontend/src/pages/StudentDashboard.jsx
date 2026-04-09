@@ -383,14 +383,18 @@ export default function StudentDashboard() {
                   </p>
                 </div>
 
-                <a
-                  href={`${backendBaseUrl}/${String(resume.file_path || "").replace(/^\//, "")}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
+                  onClick={() =>
+                    window.open(
+                      resume.file_url || `${backendBaseUrl}/${String(resume.file_path || "").replace(/^\//, "")}`,
+                      "_blank"
+                    )
+                  }
                   className="inline-flex w-full items-center justify-center rounded-2xl bg-cyan-400 px-5 py-3.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300"
                 >
                   View resume
-                </a>
+                </button>
 
                 <label className="inline-flex w-full cursor-pointer items-center justify-center rounded-2xl border border-slate-700 bg-slate-950/75 px-5 py-3.5 text-sm font-medium text-slate-300 transition hover:border-slate-500 hover:text-white">
                   Choose replacement

@@ -6,9 +6,22 @@ const axios = require("axios")
 
 const ML_API_URL = "https://skillsight-ml.onrender.com/analyze-resume"
 
-function buildResumeUrl(req, filename) {
+function getBaseUrl(req) {
+  if (process.env.BASE_URL) {
+    return process.env.BASE_URL.replace(/\/$/, "")
+  }
+
   const protocol = req.get("x-forwarded-proto") || req.protocol
-  return `${protocol}://${req.get("host")}/api/uploads/resumes/${filename}`
+  return `${protocol}://${req.get("host")}`
+}
+
+function buildResumeUrl(req, filename) {
+  return `${getBaseUrl(req)}/api/uploads/resumes/${filename}`
+}
+
+function resolveResumeFilePath(fileReference) {
+  const filename = path.basename(String(fileReference || ""))
+  return path.join(__dirname, "../uploads/resumes", filename)
 }
 
 function normalizeArray(value) {
@@ -122,10 +135,7 @@ async function analyzeResumeForJob({ userId, jobId, resumeRecord }) {
 
   const job = jobResult.rows[0]
   const resumeFilePath = latestResume.file_path || ""
-  const normalizedResumePath = resumeFilePath.startsWith("uploads/")
-    ? resumeFilePath
-    : `uploads/resumes/${resumeFilePath.split("/").pop()}`
-  const absoluteResumePath = path.join(__dirname, "..", normalizedResumePath)
+  const absoluteResumePath = resolveResumeFilePath(resumeFilePath)
 
   const dataBuffer = fs.readFileSync(absoluteResumePath)
   const pdfData = await pdfParse(dataBuffer)
@@ -271,10 +281,18 @@ exports.uploadResume = async (req, res) => {
 
     const savedResume = resumeResult.rows[0]
     const resumeId = savedResume.id
+    const fileUrl = buildResumeUrl(req, req.file.filename)
     const responseResume = {
       ...savedResume,
-      file_url: buildResumeUrl(req, req.file.filename)
+      file_url: fileUrl
     }
+
+    await pool.query(
+      `UPDATE applications
+       SET resume_url = $1
+       WHERE COALESCE(user_id, candidate_id) = $2`,
+      [fileUrl, userId]
+    )
 
     if (!jobId) {
       const applicationsResult = await pool.query(
@@ -335,6 +353,7 @@ exports.uploadResume = async (req, res) => {
 
       return res.json({
         message: "Resume analyzed successfully",
+        resume: responseResume,
         ...analysis
       })
     } catch (analysisError) {

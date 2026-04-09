@@ -3,8 +3,6 @@ import DashboardLayout from "../layouts/DashboardLayout.jsx"
 import API from "../services/api"
 import { getAuthToken } from "../utils/authSession"
 
-const backendBaseUrl = API.defaults.baseURL?.replace(/\/$/, "") || ""
-
 function computeRanking(rawCandidates) {
   const sorted = [...rawCandidates].sort((a, b) => {
     const sa = a.finalScore != null ? a.finalScore : -1
@@ -64,7 +62,7 @@ export default function CandidateRanking() {
     const fetchCandidates = async () => {
       try {
         const token = getAuthToken()
-        const res = await API.get("/dashboard/ranking-candidates", {
+        const res = await API.get("/candidates/ranking", {
           headers: { Authorization: `Bearer ${token}` }
         })
 
@@ -80,7 +78,7 @@ export default function CandidateRanking() {
           suggestions: parseList(candidate.suggestions),
           status: candidate.status || "Applied",
           rejectionFeedback: candidate.rejection_feedback || "",
-          resumePath: candidate.resume_file_path || "",
+          resumeUrl: candidate.resume_url || candidate.resume_file_path || "",
           jobTitle: candidate.job_title || "",
           minimumExperienceYears:
             candidate.min_experience_years != null ? Number(candidate.min_experience_years) : 0
@@ -292,15 +290,14 @@ export default function CandidateRanking() {
                   <DetailRow label="Status" value={selected.status || "Applied"} />
                 </div>
 
-                {selected.resumePath ? (
-                  <a
-                    href={`${backendBaseUrl}/${String(selected.resumePath || "").replace(/^\//, "")}`}
-                    target="_blank"
-                    rel="noreferrer"
+                {selected.resumeUrl ? (
+                  <button
+                    type="button"
+                    onClick={() => window.open(selected.resumeUrl, "_blank")}
                     className="mt-8 inline-flex w-full items-center justify-center rounded-2xl bg-cyan-400 px-5 py-3.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300"
                   >
                     View resume
-                  </a>
+                  </button>
                 ) : null}
 
                 <div className="mt-8">

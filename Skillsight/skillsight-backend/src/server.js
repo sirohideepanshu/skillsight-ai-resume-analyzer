@@ -19,6 +19,8 @@ const app = express();
 const uploadsRoot = path.join(__dirname, "uploads");
 const resumesRoot = path.join(uploadsRoot, "resumes");
 
+app.set("trust proxy", 1);
+
 /* ✅ IMPORTANT: allow frontend (Vercel) */
 app.use(cors({
   origin: "*", // you can restrict later
@@ -82,6 +84,16 @@ async function ensureOptionalColumns() {
   `);
 
   await pool.query(`
+    ALTER TABLE applications
+    ADD COLUMN IF NOT EXISTS user_id INTEGER
+  `);
+
+  await pool.query(`
+    ALTER TABLE applications
+    ADD COLUMN IF NOT EXISTS resume_url TEXT
+  `);
+
+  await pool.query(`
     ALTER TABLE users
     ADD COLUMN IF NOT EXISTS profile_photo TEXT
   `);
@@ -111,6 +123,12 @@ async function ensureOptionalColumns() {
 
   await pool.query(`
     UPDATE applications SET status = 'Applied' WHERE status IS NULL
+  `);
+
+  await pool.query(`
+    UPDATE applications
+    SET user_id = candidate_id
+    WHERE user_id IS NULL
   `);
 }
 

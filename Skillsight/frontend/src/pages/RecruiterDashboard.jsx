@@ -3,8 +3,6 @@ import DashboardLayout from "../layouts/DashboardLayout.jsx"
 import API from "../services/api"
 import { getAuthToken, getSessionItem } from "../utils/authSession"
 
-const backendBaseUrl = API.defaults.baseURL?.replace(/\/$/, "") || ""
-
 export default function RecruiterDashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const [applications, setApplications] = useState([])
@@ -225,15 +223,14 @@ export default function RecruiterDashboard() {
                         </td>
 
                         <td className="px-8 py-6">
-                          {app.resume_file_path ? (
-                            <a
-                              href={`${backendBaseUrl}/${String(app.resume_file_path || "").replace(/^\//, "")}`}
-                              target="_blank"
-                              rel="noreferrer"
+                          {app.resume_url || app.resume_file_path ? (
+                            <button
+                              type="button"
+                              onClick={() => window.open(app.resume_url || app.resume_file_path, "_blank")}
                               className="inline-flex items-center justify-center rounded-2xl bg-cyan-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300"
                             >
                               View resume
-                            </a>
+                            </button>
                           ) : (
                             <span className="text-sm text-slate-500">No resume</span>
                           )}

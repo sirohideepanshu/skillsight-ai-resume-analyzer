@@ -1,4 +1,6 @@
-const pool = require('../config/db')
+const path = require("path")
+
+const pool = require("../config/db")
 const { analyzeResumeForJob } = require("./resumeController")
 
 function parseStoredArray(value) {
@@ -14,26 +16,42 @@ function parseStoredArray(value) {
   return []
 }
 
+function getBaseUrl(req) {
+  if (process.env.BASE_URL) {
+    return process.env.BASE_URL.replace(/\/$/, "")
+  }
+
+  const protocol = req.get("x-forwarded-proto") || req.protocol
+  return `${protocol}://${req.get("host")}`
+}
+
+function buildResumeUrl(req, value) {
+  if (!value) return null
+  if (/^https?:\/\//i.test(value)) return value
+  const filename = path.basename(String(value))
+  return `${getBaseUrl(req)}/api/uploads/resumes/${filename}`
+}
+
 async function backfillMissingAnalysis(recruiterId) {
   const result = await pool.query(
     `SELECT DISTINCT
         a.job_id,
-        a.candidate_id,
+        COALESCE(a.user_id, a.candidate_id) AS candidate_id,
         COALESCE(a.status, 'Applied') AS application_status,
         existing_analysis.id AS analysis_id,
         existing_analysis.matched_skills,
         existing_analysis.missing_skills
      FROM applications a
      JOIN jobs j ON j.id = a.job_id
-     LEFT JOIN LATERAL (
-       SELECT ca.id, ca.matched_skills, ca.missing_skills
-       FROM candidate_analysis ca
-       JOIN resumes r ON r.id = ca.resume_id
-       WHERE ca.job_id = a.job_id
-         AND r.user_id = a.candidate_id
-       ORDER BY ca.id DESC
-       LIMIT 1
-     ) existing_analysis ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT ca.id, ca.matched_skills, ca.missing_skills
+         FROM candidate_analysis ca
+         JOIN resumes r ON r.id = ca.resume_id
+         WHERE ca.job_id = a.job_id
+         AND r.user_id = COALESCE(a.user_id, a.candidate_id)
+         ORDER BY ca.id DESC
+         LIMIT 1
+       ) existing_analysis ON TRUE
      WHERE j.recruiter_id = $1`,
     [recruiterId]
   )
@@ -134,14 +152,14 @@ exports.getRecentApplications = async (req, res) => {
               j.title AS job_title,
               a.status, a.rejection_feedback,
               u.id AS candidate_id, u.name AS candidate_name, u.email AS candidate_email,
-              lr.file_path AS resume_file_path
+              COALESCE(a.resume_url, lr.file_path) AS resume_url
        FROM applications a
        JOIN jobs j ON j.id = a.job_id
-       JOIN users u ON u.id = a.candidate_id
+       JOIN users u ON u.id = COALESCE(a.user_id, a.candidate_id)
        LEFT JOIN LATERAL (
          SELECT r.file_path
          FROM resumes r
-         WHERE r.user_id = a.candidate_id
+         WHERE r.user_id = COALESCE(a.user_id, a.candidate_id)
          ORDER BY r.id DESC
          LIMIT 1
        ) lr ON TRUE
@@ -150,7 +168,12 @@ exports.getRecentApplications = async (req, res) => {
        LIMIT 50`,
       [recruiterId]
     )
-    const rows = result.rows.map((r) => ({ ...r, status: r.status || "Applied" }))
+    const rows = result.rows.map((row) => ({
+      ...row,
+      status: row.status || "Applied",
+      resume_url: buildResumeUrl(req, row.resume_url),
+      resume_file_path: row.resume_url
+    }))
     res.json(rows)
   } catch (error) {
     console.error(error)
@@ -166,21 +189,23 @@ exports.getRankingCandidates = async (req, res) => {
     await backfillMissingAnalysis(recruiterId)
 
     const result = await pool.query(
-      `SELECT a.id AS application_id, a.job_id, a.candidate_id, a.created_at AS applied_at,
+      `SELECT a.id AS application_id, a.job_id,
+              COALESCE(a.user_id, a.candidate_id) AS candidate_id,
+              a.created_at AS applied_at,
               j.title AS job_title,
               COALESCE(j.min_experience_years, 0) AS min_experience_years,
               a.status, a.rejection_feedback,
               u.name AS candidate_name, u.email AS candidate_email,
               COALESCE(u.experience_years, 0) AS experience_years,
-              lr.file_path AS resume_file_path,
+              COALESCE(a.resume_url, lr.file_path) AS resume_url,
               ca.score, ca.matched_skills, ca.missing_skills, ca.suggestions
        FROM applications a
        JOIN jobs j ON j.id = a.job_id
-       JOIN users u ON u.id = a.candidate_id
+       JOIN users u ON u.id = COALESCE(a.user_id, a.candidate_id)
        LEFT JOIN LATERAL (
          SELECT r.file_path
          FROM resumes r
-         WHERE r.user_id = a.candidate_id
+         WHERE r.user_id = COALESCE(a.user_id, a.candidate_id)
          ORDER BY r.id DESC
          LIMIT 1
        ) lr ON TRUE
@@ -189,7 +214,7 @@ exports.getRankingCandidates = async (req, res) => {
          FROM candidate_analysis ca
          JOIN resumes r ON r.id = ca.resume_id
          WHERE ca.job_id = a.job_id
-           AND r.user_id = a.candidate_id
+           AND r.user_id = COALESCE(a.user_id, a.candidate_id)
          ORDER BY ca.id DESC
          LIMIT 1
        ) ca ON TRUE
@@ -199,7 +224,12 @@ exports.getRankingCandidates = async (req, res) => {
     )
     const byAppId = new Map()
     for (const row of result.rows) {
-      const withStatus = { ...row, status: row.status || "Applied" }
+      const withStatus = {
+        ...row,
+        status: row.status || "Applied",
+        resume_url: buildResumeUrl(req, row.resume_url),
+        resume_file_path: row.resume_url
+      }
       if (!byAppId.has(row.application_id)) byAppId.set(row.application_id, withStatus)
       else {
         const existing = byAppId.get(row.application_id)
