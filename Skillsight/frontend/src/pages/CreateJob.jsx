@@ -57,6 +57,10 @@ export default function CreateJob() {
       setSubmitting(true)
       const token = getAuthToken()
 
+      if (!token) {
+        throw new Error("Authentication token missing")
+      }
+
       const finalDescription = [
         description.trim(),
         parsedSkills.length > 0 ? `Required skills: ${parsedSkills.join(", ")}` : ""
@@ -75,7 +79,11 @@ export default function CreateJob() {
         payload.skill_weights = parsedWeights
       }
 
-      await API.post("/jobs", payload)
+      await API.post("/jobs", payload, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      })
 
       setSuccess("Job created successfully.")
       setTitle("")
@@ -90,6 +98,7 @@ export default function CreateJob() {
       const msg =
         err.response?.data?.detail ||
         err.response?.data?.error ||
+        err.message ||
         "Job creation failed"
       setError(msg)
     } finally {

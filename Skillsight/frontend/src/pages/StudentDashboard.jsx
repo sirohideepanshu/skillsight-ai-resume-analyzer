@@ -170,8 +170,7 @@ export default function StudentDashboard() {
 
       const res = await API.post("/resumes/upload", formData, {
         headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "multipart/form-data"
+          Authorization: `Bearer ${token}`
         }
       })
 

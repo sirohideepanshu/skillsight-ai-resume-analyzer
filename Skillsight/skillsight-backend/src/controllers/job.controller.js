@@ -9,11 +9,7 @@ exports.createJob = async (req, res) => {
       return res.status(400).json({ error: "Missing fields" })
     }
 
-    // skill_weights: object like { "React": 60, "CSS": 40 } for weighted scoring
-    const weights =
-  skill_weights && typeof skill_weights === "object"
-    ? JSON.stringify(skill_weights)
-    : JSON.stringify({})
+    const weights = JSON.stringify(skill_weights || {})
     const parsedMinScore = Number(min_match_score)
     const minimumScore =
       Number.isFinite(parsedMinScore) && parsedMinScore >= 0 && parsedMinScore <= 100
@@ -26,9 +22,9 @@ exports.createJob = async (req, res) => {
         : 0
 
     const result = await pool.query(
-      `INSERT INTO jobs
+       `INSERT INTO jobs
        (recruiter_id, title, description, skill_weights, min_match_score, min_experience_years)
-       VALUES ($1, $2, $3, $4, $5, $6)
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6)
        RETURNING *`,
       [recruiter_id, title, description, weights, minimumScore, minimumExperience]
     )

@@ -4,18 +4,15 @@ const API = axios.create({
   baseURL: "https://skillsight-backend-ylix.onrender.com/api",
 });
 
-/* DEBUG (remove later) */
-console.log("API BASE URL:", API.defaults.baseURL);
-
-/* attach token */
-API.interceptors.request.use((req) => {
+API.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
 
   if (token) {
-    req.headers.Authorization = `Bearer ${token}`;
+    config.headers = config.headers || {};
+    config.headers.Authorization = `Bearer ${token}`;
   }
 
-  return req;
+  return config;
 });
 
 /* handle errors globally */

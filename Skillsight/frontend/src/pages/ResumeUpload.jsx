@@ -1,7 +1,6 @@
 import { useState, useRef } from "react"
 import DashboardLayout from "../layouts/DashboardLayout.jsx"
 import API from "../services/api"
-import { getAuthToken } from "../utils/authSession"
 
 const MAX_SIZE = 10 * 1024 * 1024 // 10MB
 
@@ -82,10 +81,7 @@ export default function ResumeUpload() {
 
     const formData = new FormData()
     formData.append("resume", file)
-
-    if (jobId) {
-      formData.append("jobId", jobId)
-    }
+    formData.append("jobId", jobId)
 
     const res = await API.post("/resumes/upload", formData)
 

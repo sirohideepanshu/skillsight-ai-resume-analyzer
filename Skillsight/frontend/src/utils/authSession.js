@@ -6,18 +6,18 @@ function hasWindow() {
 
 export function getSessionItem(key) {
   if (!hasWindow()) return ""
-  return window.sessionStorage.getItem(key) || ""
+  return window.localStorage.getItem(key) || ""
 }
 
 export function setSessionItem(key, value) {
   if (!hasWindow()) return
 
   if (value == null || value === "") {
-    window.sessionStorage.removeItem(key)
+    window.localStorage.removeItem(key)
     return
   }
 
-  window.sessionStorage.setItem(key, String(value))
+  window.localStorage.setItem(key, String(value))
 }
 
 export function setAuthSession({ token, userRole, userId, userName, profilePhoto }) {

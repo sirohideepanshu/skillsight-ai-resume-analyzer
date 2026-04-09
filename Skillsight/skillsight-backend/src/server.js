@@ -1,5 +1,7 @@
 const express = require("express");
 const cors = require("cors");
+const fs = require("fs");
+const path = require("path");
 require("dotenv").config();
 
 const pool = require("./config/db");
@@ -14,6 +16,8 @@ const authMiddleware = require("./middleware/auth.middleware");
 const authorizeRoles = require("./middleware/role.middleware");
 
 const app = express();
+const uploadsRoot = path.join(__dirname, "uploads");
+const resumesRoot = path.join(uploadsRoot, "resumes");
 
 /* ✅ IMPORTANT: allow frontend (Vercel) */
 app.use(cors({
@@ -24,11 +28,10 @@ app.use(cors({
 app.use(express.json());
 
 /* static files */
-app.use("/uploads", express.static("uploads"));
-const fs = require("fs")
+app.use("/api/uploads", express.static(uploadsRoot));
 
-if (!fs.existsSync("uploads/resumes")) {
-  fs.mkdirSync("uploads/resumes", { recursive: true })
+if (!fs.existsSync(resumesRoot)) {
+  fs.mkdirSync(resumesRoot, { recursive: true })
 }
 
 /* routes */

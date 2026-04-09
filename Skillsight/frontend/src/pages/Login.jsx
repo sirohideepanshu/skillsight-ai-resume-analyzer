@@ -31,6 +31,7 @@ if (!token) {
   throw new Error("Token not received")
 }
       const user = res.data.user || res.data
+      localStorage.setItem("token", token)
 
       // ✅ Save session
       setAuthSession({

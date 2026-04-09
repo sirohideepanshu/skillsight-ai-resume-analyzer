@@ -6,6 +6,11 @@ const axios = require("axios")
 
 const ML_API_URL = "https://skillsight-ml.onrender.com/analyze-resume"
 
+function buildResumeUrl(req, filename) {
+  const protocol = req.get("x-forwarded-proto") || req.protocol
+  return `${protocol}://${req.get("host")}/api/uploads/resumes/${filename}`
+}
+
 function normalizeArray(value) {
   if (Array.isArray(value)) {
     return value.filter((item) => typeof item === "string" && item.trim())
@@ -120,7 +125,7 @@ async function analyzeResumeForJob({ userId, jobId, resumeRecord }) {
   const normalizedResumePath = resumeFilePath.startsWith("uploads/")
     ? resumeFilePath
     : `uploads/resumes/${resumeFilePath.split("/").pop()}`
-  const absoluteResumePath = path.resolve(process.cwd(), normalizedResumePath)
+  const absoluteResumePath = path.join(__dirname, "..", normalizedResumePath)
 
   const dataBuffer = fs.readFileSync(absoluteResumePath)
   const pdfData = await pdfParse(dataBuffer)
@@ -230,7 +235,16 @@ exports.getMyResume = async (req, res) => {
       [userId]
     )
 
-    res.json(result.rows[0] || null)
+    const resume = result.rows[0]
+
+    if (!resume) {
+      return res.json(null)
+    }
+
+    res.json({
+      ...resume,
+      file_url: buildResumeUrl(req, path.basename(resume.file_path || ""))
+    })
   } catch (err) {
     console.error("Fetch resume error:", err)
     res.status(500).json({ error: "Failed to fetch resume" })
@@ -255,7 +269,12 @@ exports.uploadResume = async (req, res) => {
       [userId, filePath]
     )
 
-    const resumeId = resumeResult.rows[0].id
+    const savedResume = resumeResult.rows[0]
+    const resumeId = savedResume.id
+    const responseResume = {
+      ...savedResume,
+      file_url: buildResumeUrl(req, req.file.filename)
+    }
 
     if (!jobId) {
       const applicationsResult = await pool.query(
@@ -298,7 +317,7 @@ exports.uploadResume = async (req, res) => {
 
       return res.json({
         message: "Resume uploaded successfully",
-        resume: resumeResult.rows[0],
+        resume: responseResume,
         analyzed_jobs: analysisResults,
         analysis_errors: analysisErrors
       })
@@ -322,7 +341,7 @@ exports.uploadResume = async (req, res) => {
       console.error("Resume upload analysis error:", analysisError)
       return res.status(202).json({
         message: "Resume uploaded, but analysis did not complete",
-        resume: resumeResult.rows[0],
+        resume: responseResume,
         analysis_error: analysisError.message
       })
     }
