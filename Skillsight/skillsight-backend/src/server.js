@@ -14,12 +14,22 @@ const applicationRoutes = require("./routes/application.routes");
 const mlRoutes = require("./routes/mlRoutes");
 const authMiddleware = require("./middleware/auth.middleware");
 const authorizeRoles = require("./middleware/role.middleware");
+const {
+  ensureUploadDirectories,
+  primaryUploadsRoot,
+  legacyUploadsRoot
+} = require("./utils/uploadPaths");
 
 const app = express();
-const uploadsRoot = path.join(__dirname, "uploads");
-const resumesRoot = path.join(uploadsRoot, "resumes");
 
 app.set("trust proxy", 1);
+
+pool.connect()
+  .then((client) => {
+    console.log("Database connected successfully")
+    client.release()
+  })
+  .catch((err) => console.error("Database connection error:", err))
 
 /* ✅ IMPORTANT: allow frontend (Vercel) */
 app.use(cors({
@@ -30,10 +40,12 @@ app.use(cors({
 app.use(express.json());
 
 /* static files */
-app.use("/api/uploads", express.static(uploadsRoot));
+ensureUploadDirectories()
+app.use("/api/uploads", express.static(primaryUploadsRoot));
+app.use("/api/uploads", express.static(legacyUploadsRoot));
 
-if (!fs.existsSync(resumesRoot)) {
-  fs.mkdirSync(resumesRoot, { recursive: true })
+if (!fs.existsSync(primaryUploadsRoot)) {
+  fs.mkdirSync(primaryUploadsRoot, { recursive: true })
 }
 
 /* routes */
@@ -114,6 +126,16 @@ async function ensureOptionalColumns() {
   `);
 
   await pool.query(`
+    ALTER TABLE jobs
+    ADD COLUMN IF NOT EXISTS apply_by_date DATE
+  `);
+
+  await pool.query(`
+    ALTER TABLE jobs
+    ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE
+  `);
+
+  await pool.query(`
     UPDATE jobs SET min_match_score = 75 WHERE min_match_score IS NULL
   `);
 
@@ -123,6 +145,10 @@ async function ensureOptionalColumns() {
 
   await pool.query(`
     UPDATE applications SET status = 'Applied' WHERE status IS NULL
+  `);
+
+  await pool.query(`
+    UPDATE jobs SET is_deleted = FALSE WHERE is_deleted IS NULL
   `);
 
   await pool.query(`
@@ -139,7 +165,7 @@ async function startServer() {
   try {
     await ensureOptionalColumns();
     app.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`Server running on port ${PORT}`)
     });
   } catch (error) {
     console.error("Server startup failed:", error);

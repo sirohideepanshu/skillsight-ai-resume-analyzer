@@ -1,16 +1,12 @@
 const multer = require("multer")
-const fs = require("fs")
 const path = require("path")
+const { ensureUploadDirectories, primaryResumesRoot } = require("../utils/uploadPaths")
 
-const uploadPath = path.join(__dirname, "../uploads/resumes")
-
-if (!fs.existsSync(uploadPath)) {
-  fs.mkdirSync(uploadPath, { recursive: true })
-}
+ensureUploadDirectories()
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, uploadPath)
+    cb(null, primaryResumesRoot)
   },
   filename: function (req, file, cb) {
     cb(null, Date.now() + path.extname(file.originalname))

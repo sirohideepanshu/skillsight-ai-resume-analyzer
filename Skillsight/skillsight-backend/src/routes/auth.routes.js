@@ -4,6 +4,8 @@ const bcrypt = require("bcryptjs")
 const jwt = require("jsonwebtoken")
 
 const pool = require("../config/db")
+const { JWT_SECRET } = require("../config/env")
+const authMiddleware = require("../middleware/auth.middleware")
 
 // ================= REGISTER =================
 router.post("/register", async (req, res) => {
@@ -63,7 +65,7 @@ router.post("/login", async (req, res) => {
     // 🔥 REAL JWT TOKEN (IMPORTANT)
     const token = jwt.sign(
       { id: user.id, role: user.role },
-      process.env.JWT_SECRET || "secret123",
+      JWT_SECRET,
       { expiresIn: "7d" }
     )
 
@@ -84,22 +86,11 @@ router.post("/login", async (req, res) => {
 })
 
 // ================= GET ME =================
-router.get("/me", async (req, res) => {
+router.get("/me", authMiddleware, async (req, res) => {
   try {
-    const token = req.headers.authorization?.split(" ")[1]
-
-    if (!token) {
-      return res.status(401).json({ error: "No token" })
-    }
-
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET || "secret123"
-    )
-
     const result = await pool.query(
       "SELECT id, name, email, role, profile_photo FROM users WHERE id = $1",
-      [decoded.id]
+      [req.user.id]
     )
 
     res.json({ user: result.rows[0] })

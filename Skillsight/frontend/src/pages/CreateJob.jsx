@@ -79,6 +79,10 @@ export default function CreateJob() {
         payload.skill_weights = parsedWeights
       }
 
+      if (applyBefore) {
+        payload.apply_by_date = applyBefore
+      }
+
       await API.post("/jobs", payload, {
         headers: {
           Authorization: `Bearer ${token}`

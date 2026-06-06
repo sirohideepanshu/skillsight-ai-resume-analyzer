@@ -11,6 +11,27 @@ function openResumeUrl(resumeUrl) {
   window.open(finalUrl, "_blank")
 }
 
+function buildExactMatchKey(candidate) {
+  if (candidate.finalScore == null) return ""
+  if (String(candidate.status || "Applied").toLowerCase() === "rejected") return ""
+
+  const score = Number(candidate.finalScore)
+  const yearsOfExperience = Number(candidate.yearsOfExperience || 0)
+  const minMatchScore = Number(candidate.minMatchScore ?? 75)
+  const minimumExperienceYears = Number(candidate.minimumExperienceYears ?? 0)
+  const matchedSkills = [...candidate.matchedSkills].map(String).sort()
+
+  if (!matchedSkills.length) return ""
+  if (score < minMatchScore || yearsOfExperience < minimumExperienceYears) return ""
+
+  return [
+    candidate.jobId,
+    score,
+    yearsOfExperience,
+    matchedSkills.join("|")
+  ].join("::")
+}
+
 function computeRanking(rawCandidates) {
   const sorted = [...rawCandidates].sort((a, b) => {
     const sa = a.finalScore != null ? a.finalScore : -1
@@ -22,25 +43,17 @@ function computeRanking(rawCandidates) {
     return (b.yearsOfExperience || 0) - (a.yearsOfExperience || 0)
   })
 
-  const enhanced = sorted.map((candidate) => ({ ...candidate, isExactMatch: false }))
-
-  for (let i = 0; i < enhanced.length - 1; i += 1) {
-    const a = enhanced[i]
-    const b = enhanced[i + 1]
-    const isPerfectTie =
-      a.finalScore === 100 &&
-      b.finalScore === 100
-
-    if (
-      isPerfectTie &&
-      a.finalScore === b.finalScore &&
-      a.skillMatchScore === b.skillMatchScore &&
-      a.yearsOfExperience === b.yearsOfExperience
-    ) {
-      enhanced[i].isExactMatch = true
-      enhanced[i + 1].isExactMatch = true
-    }
+  const tieCounts = new Map()
+  for (const candidate of sorted) {
+    const key = buildExactMatchKey(candidate)
+    if (!key) continue
+    tieCounts.set(key, (tieCounts.get(key) || 0) + 1)
   }
+
+  const enhanced = sorted.map((candidate) => ({
+    ...candidate,
+    isExactMatch: (tieCounts.get(buildExactMatchKey(candidate)) || 0) >= 2
+  }))
 
   return {
     sortedCandidates: enhanced,
@@ -77,6 +90,7 @@ export default function CandidateRanking() {
         const list = Array.isArray(res.data) ? res.data : []
         const mapped = list.map((candidate) => ({
           id: candidate.application_id,
+          jobId: candidate.job_id,
           name: candidate.candidate_name || candidate.candidate_email || "Candidate",
           finalScore: candidate.score != null ? Number(candidate.score) : null,
           skillMatchScore: candidate.score != null ? Number(candidate.score) : null,
@@ -88,6 +102,7 @@ export default function CandidateRanking() {
           rejectionFeedback: candidate.rejection_feedback || "",
           resumeUrl: candidate.resume_url || candidate.resume_file_path || "",
           jobTitle: candidate.job_title || "",
+          minMatchScore: candidate.min_match_score != null ? Number(candidate.min_match_score) : 75,
           minimumExperienceYears:
             candidate.min_experience_years != null ? Number(candidate.min_experience_years) : 0
         }))
@@ -264,7 +279,7 @@ export default function CandidateRanking() {
 
                 {hasExactMatches && (
                   <div className="border-t border-emerald-400/20 bg-emerald-400/8 px-6 py-4 text-sm text-emerald-200">
-                    Two or more candidates are identically ranked. Final score, skill match, and experience are the same. Manual review is recommended.
+                    Manual review is recommended only where candidates for the same job are tied on score, matched skills, and experience while still meeting the recruiter threshold.
                   </div>
                 )}
               </>

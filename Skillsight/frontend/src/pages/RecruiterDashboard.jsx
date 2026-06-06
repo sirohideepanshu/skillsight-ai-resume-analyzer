@@ -11,6 +11,45 @@ function openResumeUrl(resumeUrl) {
   window.open(finalUrl, "_blank")
 }
 
+function parseList(value) {
+  if (Array.isArray(value)) return value
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value)
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
+function buildTieKey(app) {
+  if (app.score == null) return ""
+  if (String(app.status || "Applied").toLowerCase() === "rejected") return ""
+
+  const numericScore = Number(app.score)
+  const candidateExperience = Number(app.experience_years || 0)
+  const minScore = Number(app.min_match_score ?? 75)
+  const minExperience = Number(app.min_experience_years ?? 0)
+  const matchedSkills = [...parseList(app.matched_skills)].map(String).sort()
+  if (!matchedSkills.length) return ""
+  if (numericScore < minScore || candidateExperience < minExperience) return ""
+
+  return [
+    app.job_id,
+    numericScore,
+    candidateExperience,
+    matchedSkills.join("|")
+  ].join("::")
+}
+
+function formatNameList(names) {
+  if (names.length <= 1) return names[0] || ""
+  if (names.length === 2) return `${names[0]} and ${names[1]}`
+  return `${names.slice(0, -1).join(", ")}, and ${names.at(-1)}`
+}
+
 export default function RecruiterDashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const [applications, setApplications] = useState([])
@@ -83,8 +122,86 @@ export default function RecruiterDashboard() {
     [applications]
   )
 
+  const tieCounts = useMemo(() => {
+    const counts = new Map()
+
+    for (const app of applications) {
+      const key = buildTieKey(app)
+      if (!key) continue
+      counts.set(key, (counts.get(key) || 0) + 1)
+    }
+
+    return counts
+  }, [applications])
+
   const newestApplication = applications[0]
   const avgScoreDisplay = stats.avgScore ?? 0
+  const manualReviewCandidates = useMemo(
+    () => applications.filter((app) => (tieCounts.get(buildTieKey(app)) || 0) >= 2).length,
+    [applications, tieCounts]
+  )
+  const jobApplicationGroups = useMemo(() => {
+    const groups = new Map()
+
+    for (const app of applications) {
+      const key = `${app.job_id || "unknown"}::${app.job_title || "Untitled job"}`
+      const existing = groups.get(key) || {
+        key,
+        jobId: app.job_id,
+        jobTitle: app.job_title || "Untitled job",
+        applications: []
+      }
+
+      existing.applications.push(app)
+      groups.set(key, existing)
+    }
+
+    return Array.from(groups.values())
+  }, [applications])
+  const manualReviewGroups = useMemo(() => {
+    const groups = new Map()
+
+    for (const app of applications) {
+      const key = buildTieKey(app)
+      if (!key || (tieCounts.get(key) || 0) < 2) continue
+
+      const existing = groups.get(key) || {
+        key,
+        jobId: app.job_id,
+        jobTitle: app.job_title || "this role",
+        candidates: []
+      }
+
+      existing.candidates.push({
+        id: app.application_id,
+        name: app.candidate_name || app.candidate_email || "Candidate"
+      })
+
+      groups.set(key, existing)
+    }
+
+    return Array.from(groups.values()).map((group) => ({
+      ...group,
+      candidates: group.candidates.sort((a, b) => a.name.localeCompare(b.name))
+    }))
+  }, [applications, tieCounts])
+
+  function getTiePeerLabel(app) {
+    const key = buildTieKey(app)
+    if (!key) return ""
+
+    const group = manualReviewGroups.find((item) => item.key === key)
+
+    if (!group) return ""
+
+    const currentName = app.candidate_name || app.candidate_email || "Candidate"
+    const peerNames = group.candidates
+      .map((candidate) => candidate.name)
+      .filter((name) => name !== currentName)
+
+    if (peerNames.length === 0) return ""
+    return `Tied with ${formatNameList(peerNames)} for ${group.jobTitle}.`
+  }
 
   return (
     <DashboardLayout pageTitle="Recruiter Dashboard">
@@ -146,8 +263,12 @@ export default function RecruiterDashboard() {
                 value={newestApplication?.candidate_name || newestApplication?.candidate_email || "None yet"}
               />
               <QuickRow
+                label="Manual review"
+                value={manualReviewCandidates > 0 ? `${manualReviewCandidates} candidates tied` : "No tie cases"}
+              />
+              <QuickRow
                 label="Focus"
-                value={stats.shortlisted > 0 ? "Convert shortlisted candidates" : "Review new applicants"}
+                value={manualReviewCandidates > 0 ? "Review tied candidates" : stats.shortlisted > 0 ? "Convert shortlisted candidates" : "Review new applicants"}
               />
             </div>
           </div>
@@ -164,141 +285,191 @@ export default function RecruiterDashboard() {
             </div>
           </div>
 
+          {manualReviewCandidates > 0 ? (
+            <div className="border-b border-amber-400/20 bg-amber-400/8 px-6 py-4 text-sm text-amber-200 sm:px-8">
+              <div className="space-y-2">
+                {manualReviewGroups.map((group, index) => (
+                  <p key={`${group.jobId || group.jobTitle}-${index}`}>
+                    Manual review recommended: {formatNameList(group.candidates.map((candidate) => candidate.name))} are tied for {group.jobTitle}.
+                  </p>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           {isLoading ? (
             <TableSkeleton />
           ) : applications.length === 0 ? (
             <EmptyApplications />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1180px]">
-                <thead>
-                  <tr className="border-b border-slate-800 bg-slate-950/40">
-                    <th className="px-8 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                      Candidate
-                    </th>
-                    <th className="px-8 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                      Job
-                    </th>
-                    <th className="px-8 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                      Applied
-                    </th>
-                    <th className="px-8 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                      Resume
-                    </th>
-                    <th className="px-8 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                      Feedback
-                    </th>
-                    <th className="px-8 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                      Status
-                    </th>
-                  </tr>
-                </thead>
+            <div className="space-y-8 px-6 py-6 sm:px-8">
+              {jobApplicationGroups.map((group) => {
+                const groupManualReview = manualReviewGroups.filter((item) => item.jobId === group.jobId)
 
-                <tbody className="divide-y divide-slate-800">
-                  {applications.map((app) => {
-                    const isRejected = (app.status || "Applied") === "Rejected"
-                    const candidateLabel = app.candidate_name || app.candidate_email || "Candidate"
+                return (
+                  <div key={group.key} className="overflow-hidden rounded-[28px] border border-slate-800 bg-slate-950/45">
+                    <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-800 px-6 py-5">
+                      <div>
+                        <p className="text-sm font-semibold uppercase tracking-[0.22em] text-cyan-300">Job review</p>
+                        <h4 className="mt-2 text-2xl font-semibold tracking-tight text-white">{group.jobTitle}</h4>
+                      </div>
+                      <div className="inline-flex items-center rounded-full border border-slate-800 bg-slate-900 px-3 py-1.5 text-sm font-medium text-slate-300">
+                        {group.applications.length} candidate{group.applications.length === 1 ? "" : "s"}
+                      </div>
+                    </div>
 
-                    return (
-                      <tr key={app.application_id} className="align-top transition hover:bg-slate-950/35">
-                        <td className="px-8 py-6">
-                          <div className="max-w-[220px]">
-                            <p className="text-lg font-semibold text-white">{candidateLabel}</p>
-                            <p className="mt-1 text-sm text-slate-500">
-                              {app.candidate_email || "No email available"}
+                    {groupManualReview.length > 0 ? (
+                      <div className="border-b border-amber-400/20 bg-amber-400/8 px-6 py-4 text-sm text-amber-200">
+                        <div className="space-y-2">
+                          {groupManualReview.map((item, index) => (
+                            <p key={`${item.key}-${index}`}>
+                              Manual review recommended: {formatNameList(item.candidates.map((candidate) => candidate.name))} are tied for {item.jobTitle}.
                             </p>
-                          </div>
-                        </td>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
 
-                        <td className="px-8 py-6">
-                          <div className="max-w-[220px]">
-                            <p className="text-base font-medium text-slate-200">{app.job_title || "—"}</p>
-                          </div>
-                        </td>
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[1080px]">
+                        <thead>
+                          <tr className="border-b border-slate-800 bg-slate-950/40">
+                            <th className="px-8 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                              Candidate
+                            </th>
+                            <th className="px-8 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                              Applied
+                            </th>
+                            <th className="px-8 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                              Match score
+                            </th>
+                            <th className="px-8 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                              Resume
+                            </th>
+                            <th className="px-8 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                              Feedback
+                            </th>
+                            <th className="px-8 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                              Status
+                            </th>
+                          </tr>
+                        </thead>
 
-                        <td className="px-8 py-6 text-sm text-slate-400">
-                          {app.applied_at
-                            ? new Date(app.applied_at).toLocaleDateString(undefined, { dateStyle: "medium" })
-                            : "—"}
-                        </td>
+                        <tbody className="divide-y divide-slate-800">
+                          {group.applications.map((app) => {
+                            const isRejected = (app.status || "Applied") === "Rejected"
+                            const candidateLabel = app.candidate_name || app.candidate_email || "Candidate"
+                            const humanReviewRecommended = (tieCounts.get(buildTieKey(app)) || 0) >= 2
 
-                        <td className="px-8 py-6">
-                          {app.resume_url || app.resume_file_path ? (
-                            <button
-                              type="button"
-                              onClick={() => openResumeUrl(app.resume_url || app.resume_file_path)}
-                              className="inline-flex items-center justify-center rounded-2xl bg-cyan-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300"
-                            >
-                              View resume
-                            </button>
-                          ) : (
-                            <span className="text-sm text-slate-500">No resume</span>
-                          )}
-                        </td>
+                            return (
+                              <tr key={app.application_id} className="align-top transition hover:bg-slate-950/35">
+                                <td className="px-8 py-6">
+                                  <div className="max-w-[220px]">
+                                    <p className="text-lg font-semibold text-white">{candidateLabel}</p>
+                                    <p className="mt-1 text-sm text-slate-500">
+                                      {app.candidate_email || "No email available"}
+                                    </p>
+                                  </div>
+                                </td>
 
-                        <td className="px-8 py-6">
-                          <textarea
-                            value={app.rejection_feedback || ""}
-                            onChange={(e) => {
-                              const value = e.target.value
-                              setApplications((prev) =>
-                                prev.map((item) =>
-                                  item.application_id === app.application_id
-                                    ? { ...item, rejection_feedback: value }
-                                    : item
-                                )
-                              )
-                            }}
-                            onBlur={(e) => {
-                              if (isRejected) {
-                                updateApplication(app.application_id, {
-                                  status: app.status || "Rejected",
-                                  rejectionFeedback: e.target.value || ""
-                                })
-                              }
-                            }}
-                            placeholder={
-                              isRejected
-                                ? "Add candidate feedback"
-                                : "Feedback activates when status is Rejected"
-                            }
-                            className="min-h-[92px] w-full min-w-[280px] rounded-2xl border border-slate-700 bg-slate-800/80 px-4 py-3 text-sm text-slate-200 placeholder:text-slate-500 focus:border-cyan-400/30 focus:outline-none focus:ring-2 focus:ring-cyan-400/15"
-                          />
-                        </td>
+                                <td className="px-8 py-6 text-sm text-slate-400">
+                                  {app.applied_at
+                                    ? new Date(app.applied_at).toLocaleDateString(undefined, { dateStyle: "medium" })
+                                    : "—"}
+                                </td>
 
-                        <td className="px-8 py-6">
-                          <div className="space-y-3">
-                            <StatusTag status={app.status || "Applied"} />
-                            <select
-                              value={app.status || "Applied"}
-                              onChange={(e) => {
-                                const status = e.target.value
-                                const currentFeedback = app.rejection_feedback || ""
-                                setApplications((prev) =>
-                                  prev.map((item) =>
-                                    item.application_id === app.application_id
-                                      ? { ...item, status }
-                                      : item
-                                  )
-                                )
-                                updateApplication(app.application_id, {
-                                  status,
-                                  rejectionFeedback: status === "Rejected" ? currentFeedback : ""
-                                })
-                              }}
-                              className="w-[150px] rounded-2xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm font-medium text-slate-200 focus:border-cyan-400/30 focus:outline-none focus:ring-2 focus:ring-cyan-400/15"
-                            >
-                              <option value="Applied">Applied</option>
-                              <option value="Shortlisted">Shortlisted</option>
-                              <option value="Rejected">Rejected</option>
-                            </select>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+                                <td className="px-8 py-6">
+                                  <div className="space-y-3">
+                                    <MatchScorePill score={app.score} />
+                                    {humanReviewRecommended ? (
+                                      <p className="max-w-[220px] text-xs font-medium text-amber-300">
+                                        {getTiePeerLabel(app)}
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                </td>
+
+                                <td className="px-8 py-6">
+                                  {app.resume_url || app.resume_file_path ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => openResumeUrl(app.resume_url || app.resume_file_path)}
+                                      className="inline-flex items-center justify-center rounded-2xl bg-cyan-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300"
+                                    >
+                                      View resume
+                                    </button>
+                                  ) : (
+                                    <span className="text-sm text-slate-500">No resume</span>
+                                  )}
+                                </td>
+
+                                <td className="px-8 py-6">
+                                  <textarea
+                                    value={app.rejection_feedback || ""}
+                                    onChange={(e) => {
+                                      const value = e.target.value
+                                      setApplications((prev) =>
+                                        prev.map((item) =>
+                                          item.application_id === app.application_id
+                                            ? { ...item, rejection_feedback: value }
+                                            : item
+                                        )
+                                      )
+                                    }}
+                                    onBlur={(e) => {
+                                      if (isRejected) {
+                                        updateApplication(app.application_id, {
+                                          status: app.status || "Rejected",
+                                          rejectionFeedback: e.target.value || ""
+                                        })
+                                      }
+                                    }}
+                                    placeholder={
+                                      isRejected
+                                        ? "Add candidate feedback"
+                                        : "Feedback activates when status is Rejected"
+                                    }
+                                    className="min-h-[92px] w-full min-w-[280px] rounded-2xl border border-slate-700 bg-slate-800/80 px-4 py-3 text-sm text-slate-200 placeholder:text-slate-500 focus:border-cyan-400/30 focus:outline-none focus:ring-2 focus:ring-cyan-400/15"
+                                  />
+                                </td>
+
+                                <td className="px-8 py-6">
+                                  <div className="space-y-3">
+                                    <StatusTag status={app.status || "Applied"} />
+                                    <select
+                                      value={app.status || "Applied"}
+                                      onChange={(e) => {
+                                        const status = e.target.value
+                                        const currentFeedback = app.rejection_feedback || ""
+                                        setApplications((prev) =>
+                                          prev.map((item) =>
+                                            item.application_id === app.application_id
+                                              ? { ...item, status }
+                                              : item
+                                          )
+                                        )
+                                        updateApplication(app.application_id, {
+                                          status,
+                                          rejectionFeedback: status === "Rejected" ? currentFeedback : ""
+                                        })
+                                      }}
+                                      className="w-[150px] rounded-2xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm font-medium text-slate-200 focus:border-cyan-400/30 focus:outline-none focus:ring-2 focus:ring-cyan-400/15"
+                                    >
+                                      <option value="Applied">Applied</option>
+                                      <option value="Shortlisted">Shortlisted</option>
+                                      <option value="Rejected">Rejected</option>
+                                    </select>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
         </section>
@@ -345,6 +516,30 @@ function StatusTag({ status }) {
   return (
     <span className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold ${classes}`}>
       {status}
+    </span>
+  )
+}
+
+function MatchScorePill({ score }) {
+  if (score == null) {
+    return (
+      <span className="inline-flex items-center rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-300">
+        Pending
+      </span>
+    )
+  }
+
+  const numericScore = Number(score)
+  const classes =
+    numericScore >= 80
+      ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
+      : numericScore >= 60
+        ? "border-cyan-400/20 bg-cyan-400/10 text-cyan-200"
+        : "border-amber-400/20 bg-amber-400/10 text-amber-200"
+
+  return (
+    <span className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold ${classes}`}>
+      {numericScore}%
     </span>
   )
 }

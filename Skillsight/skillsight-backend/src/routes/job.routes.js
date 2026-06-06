@@ -17,4 +17,10 @@ router.get(
   jobController.getJobs
 )
 
+router.delete(
+  "/:id",
+  authMiddleware,
+  jobController.deleteJob
+)
+
 module.exports = router

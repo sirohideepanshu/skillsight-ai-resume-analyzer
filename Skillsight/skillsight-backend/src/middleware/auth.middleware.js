@@ -16,8 +16,6 @@ const authMiddleware = (req, res, next) => {
   }
 
   const token = parts[1];
-console.log("Token:", token)
-console.log("Secret:", JWT_SECRET)
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);

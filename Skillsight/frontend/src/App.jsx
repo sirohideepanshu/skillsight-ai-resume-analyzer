@@ -28,18 +28,60 @@ const router = createBrowserRouter([
   {
     path: '/dashboard',
     element: (
-      // <ProtectedRoute>
+      <ProtectedRoute>
         <Dashboard />
-      /* </ProtectedRoute> */
+      </ProtectedRoute>
     ),
   },
-  { path: '/dashboard/jobs', element: <Jobs /> },
-  { path: '/dashboard/jobs/create', element: <CreateJob /> },
+  {
+    path: '/dashboard/jobs',
+    element: (
+      <ProtectedRoute>
+        <Jobs />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/dashboard/jobs/create',
+    element: (
+      <ProtectedRoute>
+        <CreateJob />
+      </ProtectedRoute>
+    ),
+  },
   // { path: '/dashboard/candidates', element: <Candidates /> },
-  { path: '/dashboard/candidates/ranking', element: <CandidateRanking /> },
-  { path: '/dashboard/settings', element: <Settings /> },
-  { path: '/dashboard/student/settings', element: <Settings /> },
-  { path: '/dashboard/upload', element: <ResumeUpload /> },
+  {
+    path: '/dashboard/candidates/ranking',
+    element: (
+      <ProtectedRoute>
+        <CandidateRanking />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/dashboard/settings',
+    element: (
+      <ProtectedRoute>
+        <Settings />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/dashboard/student/settings',
+    element: (
+      <ProtectedRoute>
+        <Settings />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/dashboard/upload',
+    element: (
+      <ProtectedRoute>
+        <ResumeUpload />
+      </ProtectedRoute>
+    ),
+  },
   {
     path: '/dashboard/recruiter',
     element: (

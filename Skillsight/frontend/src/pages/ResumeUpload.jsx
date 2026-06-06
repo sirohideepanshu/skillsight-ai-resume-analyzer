@@ -96,6 +96,9 @@ export default function ResumeUpload() {
     setError(
       err.response?.data?.error ||
       err.response?.data?.message ||
+      (err.message?.includes("Network Error")
+        ? "Cannot connect to backend. Make sure the local backend is running on port 5050."
+        : err.message) ||
       "Upload failed"
     )
   }

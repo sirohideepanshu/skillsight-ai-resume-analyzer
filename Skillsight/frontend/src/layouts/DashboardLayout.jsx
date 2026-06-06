@@ -84,6 +84,11 @@ export default function DashboardLayout({ children, pageTitle }) {
         })
       } catch (error) {
         console.error("Failed to load sidebar profile:", error)
+
+        if (error.response?.status === 401) {
+          clearAuthSession()
+          window.location.href = "/login"
+        }
       }
     }
 

@@ -41,7 +41,8 @@ async function backfillMissingAnalysis(recruiterId) {
          ORDER BY ca.id DESC
          LIMIT 1
        ) existing_analysis ON TRUE
-     WHERE j.recruiter_id = $1`,
+     WHERE j.recruiter_id = $1
+       AND COALESCE(j.is_deleted, FALSE) = FALSE`,
     [recruiterId]
   )
 
@@ -73,9 +74,15 @@ exports.getDashboardStats = async (req, res) => {
   try {
     const recruiterId = req.user.id
 
+    await backfillMissingAnalysis(recruiterId)
+
     // total jobs created by recruiter
     const jobsResult = await pool.query(
-      `SELECT COUNT(*) FROM jobs WHERE recruiter_id=$1`,
+      `SELECT COUNT(*)
+       FROM jobs
+       WHERE recruiter_id = $1
+         AND COALESCE(is_deleted, FALSE) = FALSE
+         AND (apply_by_date IS NULL OR apply_by_date >= CURRENT_DATE)`,
       [recruiterId]
     )
 
@@ -85,7 +92,8 @@ exports.getDashboardStats = async (req, res) => {
     const appsResult = await pool.query(
       `SELECT COUNT(*) FROM applications a
        JOIN jobs j ON j.id = a.job_id
-       WHERE j.recruiter_id = $1`,
+       WHERE j.recruiter_id = $1
+         AND COALESCE(j.is_deleted, FALSE) = FALSE`,
       [recruiterId]
     )
 
@@ -93,12 +101,12 @@ exports.getDashboardStats = async (req, res) => {
 
     // shortlisted candidates (score >= 80)
     const shortlistedResult = await pool.query(
-      `
-      SELECT COUNT(*)
-      FROM candidate_analysis
-      JOIN jobs ON candidate_analysis.job_id = jobs.id
-      WHERE jobs.recruiter_id=$1 AND candidate_analysis.score >= 80
-      `,
+      `SELECT COUNT(*)
+       FROM applications a
+       JOIN jobs j ON j.id = a.job_id
+       WHERE j.recruiter_id = $1
+         AND COALESCE(j.is_deleted, FALSE) = FALSE
+         AND COALESCE(a.status, 'Applied') = 'Shortlisted'`,
       [recruiterId]
     )
 
@@ -106,12 +114,11 @@ exports.getDashboardStats = async (req, res) => {
 
     // average score
     const avgScoreResult = await pool.query(
-      `
-      SELECT AVG(score) 
-      FROM candidate_analysis
-      JOIN jobs ON candidate_analysis.job_id = jobs.id
-      WHERE jobs.recruiter_id=$1
-      `,
+      `SELECT AVG(score)
+       FROM candidate_analysis
+       JOIN jobs ON candidate_analysis.job_id = jobs.id
+       WHERE jobs.recruiter_id = $1
+         AND COALESCE(jobs.is_deleted, FALSE) = FALSE`,
       [recruiterId]
     )
 
@@ -136,12 +143,19 @@ exports.getDashboardStats = async (req, res) => {
 exports.getRecentApplications = async (req, res) => {
   try {
     const recruiterId = req.user.id
+
+    await backfillMissingAnalysis(recruiterId)
+
     const result = await pool.query(
       `SELECT a.id AS application_id, a.job_id, a.created_at AS applied_at,
               j.title AS job_title,
               a.status, a.rejection_feedback,
+              COALESCE(j.min_match_score, 75) AS min_match_score,
+              COALESCE(j.min_experience_years, 0) AS min_experience_years,
               u.id AS candidate_id, u.name AS candidate_name, u.email AS candidate_email,
-              COALESCE(a.resume_url, lr.file_path) AS resume_url
+              COALESCE(u.experience_years, 0) AS experience_years,
+              COALESCE(a.resume_url, lr.file_path) AS resume_url,
+              ca.score, ca.matched_skills, ca.missing_skills
        FROM applications a
        JOIN jobs j ON j.id = a.job_id
        JOIN users u ON u.id = COALESCE(a.user_id, a.candidate_id)
@@ -152,7 +166,17 @@ exports.getRecentApplications = async (req, res) => {
          ORDER BY r.id DESC
          LIMIT 1
        ) lr ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT ca.score, ca.matched_skills, ca.missing_skills
+         FROM candidate_analysis ca
+         JOIN resumes r ON r.id = ca.resume_id
+         WHERE ca.job_id = a.job_id
+           AND r.user_id = COALESCE(a.user_id, a.candidate_id)
+         ORDER BY ca.id DESC
+         LIMIT 1
+       ) ca ON TRUE
        WHERE j.recruiter_id = $1
+         AND COALESCE(j.is_deleted, FALSE) = FALSE
        ORDER BY a.created_at DESC
        LIMIT 50`,
       [recruiterId]
@@ -182,6 +206,7 @@ exports.getRankingCandidates = async (req, res) => {
               COALESCE(a.user_id, a.candidate_id) AS candidate_id,
               a.created_at AS applied_at,
               j.title AS job_title,
+              COALESCE(j.min_match_score, 75) AS min_match_score,
               COALESCE(j.min_experience_years, 0) AS min_experience_years,
               a.status, a.rejection_feedback,
               u.name AS candidate_name, u.email AS candidate_email,
@@ -208,6 +233,7 @@ exports.getRankingCandidates = async (req, res) => {
          LIMIT 1
        ) ca ON TRUE
        WHERE j.recruiter_id = $1
+         AND COALESCE(j.is_deleted, FALSE) = FALSE
        ORDER BY ca.score DESC NULLS LAST, a.created_at DESC`,
       [recruiterId]
     )

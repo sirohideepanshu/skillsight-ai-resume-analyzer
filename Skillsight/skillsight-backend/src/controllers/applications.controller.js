@@ -33,7 +33,12 @@ exports.getMyApplications = async (req, res) => {
     const result = await pool.query(
       `SELECT a.id AS application_id, a.job_id, a.created_at AS applied_at,
               a.status, a.rejection_feedback, a.resume_url,
-              j.title, j.description, j.skill_weights, j.min_experience_years, j.created_at AS job_created_at,
+              j.title, j.description, j.skill_weights, j.min_match_score, j.min_experience_years,
+              j.apply_by_date, j.created_at AS job_created_at,
+              CASE
+                WHEN j.apply_by_date IS NOT NULL AND j.apply_by_date < CURRENT_DATE THEN TRUE
+                ELSE FALSE
+              END AS is_closed,
               ca.suggestions AS analysis_suggestions
        FROM applications a
        JOIN jobs j ON j.id = a.job_id
@@ -73,6 +78,28 @@ exports.createApplication = async (req, res) => {
 
     if (!job_id) {
       return res.status(400).json({ error: "Job ID required" })
+    }
+
+    const jobResult = await pool.query(
+      `SELECT id, title, apply_by_date, COALESCE(is_deleted, FALSE) AS is_deleted,
+              CASE
+                WHEN COALESCE(is_deleted, FALSE) THEN TRUE
+                WHEN apply_by_date IS NOT NULL AND apply_by_date < CURRENT_DATE THEN TRUE
+                ELSE FALSE
+              END AS is_closed
+       FROM jobs
+       WHERE id = $1`,
+      [job_id]
+    )
+
+    const job = jobResult.rows[0]
+
+    if (!job || job.is_deleted) {
+      return res.status(404).json({ error: "Job not found" })
+    }
+
+    if (job.is_closed) {
+      return res.status(400).json({ error: "Job is closed" })
     }
 
     const latestResumeResult = await pool.query(

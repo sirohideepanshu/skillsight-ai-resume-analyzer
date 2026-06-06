@@ -116,6 +116,7 @@ export default function StudentDashboard() {
   const [applications, setApplications] = useState([])
   const [resume, setResume] = useState(null)
   const [file, setFile] = useState(null)
+  const [expandedJobId, setExpandedJobId] = useState(null)
   const [career, setCareer] = useState("")
   const [uploading, setUploading] = useState(false)
   const [notice, setNotice] = useState(null)
@@ -199,9 +200,17 @@ export default function StudentDashboard() {
       loadResume()
       loadMyApplications()
     } catch (err) {
+      const message =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        (err.message?.includes("Network Error")
+          ? "Cannot connect to backend. Make sure the local backend is running on port 5050."
+          : err.message) ||
+        "Resume upload failed. Try again."
+
       setNotice({
         type: "error",
-        text: err.response?.data?.error || "Resume upload failed. Try again."
+        text: message
       })
     } finally {
       setUploading(false)
@@ -471,7 +480,13 @@ export default function StudentDashboard() {
               ) : (
                 recentJobs.map((job) => {
                   const applied = appliedJobIds.has(job.id)
+                  const isClosed = Boolean(job.is_closed)
+                  const isExpanded = expandedJobId === job.id
                   const skillWeightText = formatSkillWeights(job.skill_weights)
+                  const statusLabel = applied ? "Applied" : isClosed ? "Closed" : "Open"
+                  const weightedSkills = job.skill_weights && typeof job.skill_weights === "object"
+                    ? Object.entries(job.skill_weights).filter(([, value]) => typeof value === "number")
+                    : []
 
                   return (
                     <article
@@ -482,25 +497,94 @@ export default function StudentDashboard() {
                         <div>
                           <h3 className="text-xl font-semibold text-white">{job.title}</h3>
                           <p className="mt-3 text-sm leading-7 text-slate-400">
-                            {truncate(job.description, 95)}
+                            {isExpanded ? job.description : truncate(job.description, 95)}
                           </p>
                         </div>
-                        <StatusPill status={applied ? "Applied" : "Open"} />
+                        <div className="flex items-center gap-3">
+                          <StatusPill status={statusLabel} />
+                          <button
+                            type="button"
+                            onClick={() => setExpandedJobId((current) => (current === job.id ? null : job.id))}
+                            className="inline-flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-300 transition hover:border-cyan-400/30 hover:text-white"
+                          >
+                            {isExpanded ? "Hide details" : "View details"}
+                            <svg
+                              className={`h-4 w-4 transition ${isExpanded ? "rotate-180" : ""}`}
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="m6 9 6 6 6-6" />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
 
                       <div className="mt-4 flex flex-wrap items-center gap-3">
                         {skillWeightText ? <InfoChip label={skillWeightText} /> : null}
-                        {!applied ? (
+                        {job.apply_by_date ? (
+                          <InfoChip
+                            label={`Apply by ${new Date(job.apply_by_date).toLocaleDateString(undefined, { dateStyle: "medium" })}`}
+                          />
+                        ) : null}
+                        {!applied && !isClosed ? (
                           <button
                             onClick={() => applyJob(job.id)}
                             className="inline-flex items-center justify-center rounded-2xl bg-cyan-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300"
                           >
                             Apply now
                           </button>
+                        ) : isClosed && !applied ? (
+                          <span className="text-sm font-medium text-amber-200">Applications closed</span>
                         ) : (
                           <span className="text-sm text-slate-500">Already applied</span>
                         )}
                       </div>
+
+                      {isExpanded ? (
+                        <div className="mt-5 rounded-[22px] border border-slate-800 bg-slate-900/75 p-4">
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <DetailBlock
+                              label="Full description"
+                              value={job.description || "No description provided."}
+                              stacked
+                            />
+                            <div className="grid gap-4">
+                              <DetailBlock
+                                label="Minimum match score"
+                                value={`${job.min_match_score ?? 75}%`}
+                              />
+                              <DetailBlock
+                                label="Minimum experience"
+                                value={`${job.min_experience_years ?? 0} yrs`}
+                              />
+                              <DetailBlock
+                                label="Apply by"
+                                value={
+                                  job.apply_by_date
+                                    ? new Date(job.apply_by_date).toLocaleDateString(undefined, { dateStyle: "medium" })
+                                    : "No deadline"
+                                }
+                              />
+                            </div>
+                          </div>
+
+                          <div className="mt-4">
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                              Skill weightage
+                            </p>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {weightedSkills.length > 0 ? (
+                                weightedSkills.map(([skill, value]) => (
+                                  <InfoChip key={skill} label={`${skill}: ${value}%`} />
+                                ))
+                              ) : (
+                                <p className="text-sm text-slate-500">No skill weightage configured.</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
                     </article>
                   )
                 })
@@ -621,6 +705,17 @@ function InfoChip({ label }) {
     <span className="inline-flex items-center rounded-full border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-400">
       {label}
     </span>
+  )
+}
+
+function DetailBlock({ label, value, stacked = false }) {
+  return (
+    <div className={`rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-4 ${stacked ? "h-full" : ""}`}>
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</p>
+      <p className={`mt-3 text-sm text-slate-300 ${stacked ? "leading-7" : "font-medium text-white"}`}>
+        {value}
+      </p>
+    </div>
   )
 }
 

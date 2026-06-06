@@ -2,32 +2,65 @@ import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import DashboardLayout from "../layouts/DashboardLayout.jsx"
 import API from "../services/api"
+import { getAuthToken, getSessionItem } from "../utils/authSession"
 
 export default function Jobs() {
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(true)
+  const [deletingJobId, setDeletingJobId] = useState(null)
+  const token = getAuthToken()
+  const recruiterId = getSessionItem("userId")
 
   useEffect(() => {
-  const loadJobs = async () => {
+    const loadJobs = async () => {
+      try {
+        const res = await API.get("/jobs")
+        setJobs(Array.isArray(res.data) ? res.data : [])
+      } catch (error) {
+        console.error("Failed to load jobs:", error)
+        setJobs([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadJobs()
+  }, [])
+
+  const deleteJob = async (jobId) => {
+    if (!token || deletingJobId) return
+    const confirmed = window.confirm("Delete this job? Existing applications will no longer appear in active hiring views.")
+    if (!confirmed) return
+
     try {
-      const res = await API.get("/jobs")
-      setJobs(Array.isArray(res.data) ? res.data : [])
+      setDeletingJobId(jobId)
+      await API.delete(`/jobs/${jobId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      setJobs((prev) => prev.filter((job) => job.id !== jobId))
     } catch (error) {
-      console.error("Failed to load jobs:", error)
-      setJobs([])
+      console.error("Failed to delete job:", error)
     } finally {
-      setLoading(false)
+      setDeletingJobId(null)
     }
   }
-
-  loadJobs()
-}, [])
-
- 
 
   const weightedRoles = useMemo(
     () => jobs.filter((job) => job.skill_weights && Object.keys(job.skill_weights).length > 0).length,
     [jobs]
+  )
+  const openJobs = useMemo(() => jobs.filter((job) => !job.is_closed).length, [jobs])
+  const recruiterJobs = useMemo(
+    () => jobs.filter((job) => String(job.recruiter_id) === String(recruiterId)),
+    [jobs, recruiterId]
+  )
+  const recruiterWeightedRoles = useMemo(
+    () => recruiterJobs.filter((job) => job.skill_weights && Object.keys(job.skill_weights).length > 0).length,
+    [recruiterJobs]
+  )
+  const recruiterOpenJobs = useMemo(
+    () => recruiterJobs.filter((job) => !job.is_closed).length,
+    [recruiterJobs]
   )
 
   return (
@@ -44,9 +77,9 @@ export default function Jobs() {
             </p>
 
             <div className="mt-6 grid gap-4 sm:grid-cols-3">
-              <MetricCard value={jobs.length} label="Total jobs" />
-              <MetricCard value={weightedRoles} label="Weighted roles" />
-              <MetricCard value={jobs.length > 0 ? "Live" : "Empty"} label="Board state" />
+              <MetricCard value={recruiterJobs.length} label="Your jobs" />
+              <MetricCard value={recruiterWeightedRoles} label="Weighted roles" />
+              <MetricCard value={recruiterJobs.length > 0 ? `${recruiterOpenJobs} open` : "Empty"} label="Board state" />
             </div>
           </div>
 
@@ -88,11 +121,11 @@ export default function Jobs() {
               <div className="rounded-[28px] border border-slate-800 bg-slate-950/75 px-6 py-12 text-center text-slate-400">
                 Loading jobs...
               </div>
-            ) : jobs.length === 0 ? (
+            ) : recruiterJobs.length === 0 ? (
               <EmptyJobs />
             ) : (
               <div className="grid gap-4 lg:grid-cols-2">
-                {jobs.map((job) => (
+                {recruiterJobs.map((job) => (
                   <article
                     key={job.id}
                     className="rounded-[28px] border border-slate-800 bg-slate-950/75 p-6 transition hover:border-slate-700"
@@ -104,11 +137,22 @@ export default function Jobs() {
                           {truncate(job.description, 170)}
                         </p>
                       </div>
-                      <span className="inline-flex items-center rounded-full border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-300">
-                        {job.created_at
-                          ? new Date(job.created_at).toLocaleDateString(undefined, { dateStyle: "medium" })
-                          : "Recently created"}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center rounded-full border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-300">
+                          {job.created_at
+                            ? new Date(job.created_at).toLocaleDateString(undefined, { dateStyle: "medium" })
+                            : "Recently created"}
+                        </span>
+                        <span
+                          className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold ${
+                            job.is_closed
+                              ? "border-amber-400/20 bg-amber-400/10 text-amber-200"
+                              : "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
+                          }`}
+                        >
+                          {job.is_closed ? "Closed" : "Open"}
+                        </span>
+                      </div>
                     </div>
 
                     <div className="mt-5 flex flex-wrap gap-2">
@@ -132,7 +176,25 @@ export default function Jobs() {
                           No weightage configured
                         </span>
                       )}
+                      {job.apply_by_date ? (
+                        <span className="inline-flex items-center rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1.5 text-xs font-semibold text-amber-200">
+                          Apply by {new Date(job.apply_by_date).toLocaleDateString(undefined, { dateStyle: "medium" })}
+                        </span>
+                      ) : null}
                     </div>
+
+                    {String(job.recruiter_id) === String(recruiterId) ? (
+                      <div className="mt-5 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => deleteJob(job.id)}
+                          disabled={deletingJobId === job.id}
+                          className="inline-flex items-center justify-center rounded-2xl border border-rose-400/25 bg-rose-400/10 px-4 py-2.5 text-sm font-semibold text-rose-200 transition hover:bg-rose-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {deletingJobId === job.id ? "Deleting..." : "Delete job"}
+                        </button>
+                      </div>
+                    ) : null}
                   </article>
                 ))}
               </div>

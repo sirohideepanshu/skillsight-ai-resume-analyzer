@@ -2,8 +2,13 @@ const fs = require("fs")
 const path = require("path")
 const axios = require("axios")
 const pdf = require("pdf-parse")
+const { resolveResumeFilePath } = require("../utils/uploadPaths")
 
-const ML_API_URL = process.env.ML_API_URL || "https://skillsight-ml.onrender.com/analyze-resume"
+const ML_API_URL =
+  process.env.ML_API_URL ||
+  (process.env.NODE_ENV === "production"
+    ? "https://skillsight-ml.onrender.com/analyze-resume"
+    : "http://127.0.0.1:8000/analyze-resume")
 
 function normalizeArray(value) {
   if (Array.isArray(value)) {
@@ -166,8 +171,7 @@ function buildStoredResumeUrl(filenameOrPath) {
 }
 
 function buildResumeFilePath(filenameOrPath) {
-  const filename = path.basename(String(filenameOrPath || ""))
-  return path.join(__dirname, "../uploads/resumes", filename)
+  return resolveResumeFilePath(filenameOrPath)
 }
 
 module.exports = {
