@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
+import ServerWakeBanner from './components/ServerWakeBanner.jsx'
 import { ThemeProvider, getInitialTheme } from './ThemeContext.jsx'
 
 document.documentElement.classList.toggle(
@@ -12,6 +13,7 @@ document.documentElement.classList.toggle(
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ThemeProvider>
+      <ServerWakeBanner />
       <App />
     </ThemeProvider>
   </StrictMode>,
