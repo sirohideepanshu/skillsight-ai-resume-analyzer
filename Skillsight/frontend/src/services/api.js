@@ -1,11 +1,32 @@
 import axios from "axios";
 import { clearAuthSession } from "../utils/authSession";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  (import.meta.env.DEV
-    ? "http://localhost:5050/api"
-    : "https://skillsight-backend-ylix.onrender.com/api");
+const DEFAULT_API_URL = import.meta.env.DEV
+  ? "http://localhost:5050/api"
+  : "https://skillsight-backend-ylix.onrender.com/api";
+
+/*
+ * Normalize whatever VITE_API_URL is configured in the deploy env. We've hit
+ * misconfigured values like "https://host.onrender.com " (trailing space) or
+ * one missing the "/api" suffix, which produce unparseable request URLs such
+ * as "https://host.onrender.com /auth/login". Trim surrounding whitespace,
+ * drop any trailing slashes, and guarantee the "/api" suffix so endpoints like
+ * "/auth/login" always resolve correctly.
+ */
+function normalizeApiBaseUrl(raw) {
+  const value = (raw || "").trim();
+  if (!value) return DEFAULT_API_URL;
+
+  const withoutTrailingSlash = value.replace(/\/+$/, "");
+
+  if (/\/api$/i.test(withoutTrailingSlash)) {
+    return withoutTrailingSlash;
+  }
+
+  return `${withoutTrailingSlash}/api`;
+}
+
+const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_URL);
 
 /*
  * The backend runs on Render's free tier, which spins the instance down after
